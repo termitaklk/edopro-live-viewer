@@ -1,0 +1,291 @@
+html {
+  font-size: 16px;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+  background-color: #f0f0f0;
+  overflow: hidden;
+}
+
+.board {
+  width: 80vw;
+  max-width: 512px;
+  /* Tablero máximo de 512px de ancho */
+  height: calc(80vw * 0.8);
+  /* Mantiene la proporción de 512x410 (aproximadamente) */
+  max-height: calc(512px * 0.8);
+  /* Altura máxima de 80% del ancho */
+  background-image: url('./Tablero/Tablero1.png');
+  background-size: cover;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: perspective(600px) rotateX(37deg);
+  /* Perspectiva y rotación aplicadas juntas */
+  position: relative;
+}
+
+.coverA {
+  position: absolute;
+  width: 2.3rem;
+  height: 3.5rem;
+  background-image: url('./Carta/Carta1.png');
+  background-size: cover;
+  transition: all 0.5s ease;
+  top: 8px;
+  left: 63.6px;
+}
+
+.coverB {
+  position: absolute;
+  width: 2.3rem;
+  height: 3.5rem;
+  background-image: url('./Carta/Carta1.png');
+  background-size: cover;
+  transition: all 0.5s ease;
+  top: 346px;
+  left: 407px;
+}
+
+/* Colocar una carta monstruo boca abajo*/
+#setm {
+  top: 42px;
+  left: 120px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+/* Colocar un monstruo en atk*/
+#atk {
+  top: 42px;
+  left: 120px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+/* La celda A es para magias y trampas "Player A"*/
+#a1 {
+  top: 42px;
+  left: 120px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+#a2 {
+  top: 42px;
+  left: 175px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+#a3 {
+  top: 42px;
+  left: 230px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+#a4 {
+  top: 42px;
+  left: 285px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+#a5 {
+  top: 42px;
+  left: 340px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+/* La celda B es para Monstruos "Player A"*/
+#b1 {
+  top: 105px;
+  left: 120px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+#b2 {
+  top: 105px;
+  left: 175px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+#b3 {
+  top: 105px;
+  left: 230px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+#b4 {
+  top: 105px;
+  left: 285px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+#b5 {
+  top: 105px;
+  left: 340px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+/* La celda C es para magias y trampas "Player B"*/
+#c1 {
+  top: 310px;
+  left: 120px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+#c2 {
+  top: 310px;
+  left: 175px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+#c3 {
+  top: 310px;
+  left: 230px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+#c4 {
+  top: 310px;
+  left: 285px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+#c5 {
+  top: 310px;
+  left: 340px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(241, 237, 237, 0.5);
+  position: absolute;
+}
+
+/* La celda D es para Monstruos "Player B"*/
+#d1 {
+  top: 248px;
+  left: 120px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+#d2 {
+  top: 248px;
+  left: 175px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+#d3 {
+  top: 248px;
+  left: 230px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+#d4 {
+  top: 248px;
+  left: 285px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+#d5 {
+  top: 248px;
+  left: 340px;
+  width: 3rem;
+  height: 3.5rem;
+  background-color: rgba(200, 255, 0, 0.5);
+  position: absolute;
+}
+
+.card-row {
+  display: flex;
+  justify-content: center;
+  margin: 75px 0;
+}
+
+.card-holder {
+  display: flex;
+  justify-content: center;
+}
+
+.card {
+  width: 30px;
+  height: 60px;
+  background-size: cover;
+  background-position: center;
+  margin: 3px;
+  border-radius: 3px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.player1 {
+  position: absolute;
+  top: 205px;
+  left: 660px;
+}
+
+.player2 {
+  position: absolute;
+  top: 550px;
+  left: 660px;
+}
+
+  
