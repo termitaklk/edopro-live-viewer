@@ -27,6 +27,7 @@ body {
   transform: perspective(600px) rotateX(37deg);
   /* Perspectiva y rotación aplicadas juntas */
   position: relative;
+  z-index: 1; /* Un z-index más bajo que el de las cartas */
 }
 
 .coverA {
@@ -264,6 +265,7 @@ body {
 .card-holder {
   display: flex;
   justify-content: center;
+  z-index: 2; /* Un z-index más alto para que las cartas aparezcan por encima del tablero */
 }
 
 .card {
@@ -271,7 +273,7 @@ body {
   height: 60px;
   background-size: cover;
   background-position: center;
-  margin: 3px;
+  margin: 1px;
   border-radius: 3px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
@@ -279,13 +281,17 @@ body {
 .player1 {
   position: absolute;
   top: 205px;
-  left: 660px;
+  left: 670px;
+  transform: scale(1.2); /* Ajusta este valor según sea necesario para compensar la perspectiva 3D */
 }
 
 .player2 {
   position: absolute;
-  top: 550px;
-  left: 660px;
+  top: 530px;
+  left: 670px;
+  transform: scale(1.7); /* Ajusta este valor según sea necesario para compensar la perspectiva 3D */
+  z-index: 2; /* Un z-index más alto para que las cartas aparezcan por encima del tablero */
+
 }
 
   
