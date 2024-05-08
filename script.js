@@ -143,3 +143,19 @@ function playCardMonstersHorizontal() {
         player1FirstCard.style.transform = 'rotate(90deg)';
     }, 10);
 }
+
+// Posicionar la mano del jugador 1
+const player1Hand = document.getElementById('player1Row1');
+player1Hand.style.position = 'absolute';
+player1Hand.style.top = '-162px'; // Ajustar la posición vertical según sea necesario
+player1Hand.style.left = '-125px'; // Ajustar la posición horizontal según sea necesario
+
+// Posicionar la mano del jugador 2
+const player2Hand = document.getElementById('player2Row1');
+player2Hand.style.position = 'absolute';
+player2Hand.style.bottom = '-253px'; // Ajustar la posición vertical según sea necesario
+player2Hand.style.right = '-173px'; // Ajustar la posición horizontal según sea necesario
+
+
+
+
