@@ -11,6 +11,8 @@
         <button id="playCardMonstersButton">Play Card Monsters</button>
         <button id="playCardButton">Play Card Magias/Trampas</button>
         <button id="playCardMonstersHorizontalButton">Monster Set</button>
+        <button id="addCardButtonPlayer1">Draw Player 1</button>
+        <button id="addCardButtonPlayer2">Draw Player 2</button>
     </div>
 
     <!-- Jugador 1 -->
@@ -63,6 +65,12 @@
         <div id="coverB" class="coverB"></div>
     </div>
     <script src="script.js"></script>
+    <script>
+        document.getElementById('addCardButtonPlayer1').addEventListener('click', addCardToPlayer1);
+    </script>
+    <script>
+        document.getElementById('addCardButtonPlayer2').addEventListener('click', addCardToPlayer2);
+    </script>
 </body>
 
 

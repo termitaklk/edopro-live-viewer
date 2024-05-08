@@ -143,6 +143,39 @@ function playCardMonstersHorizontal() {
         player1FirstCard.style.transform = 'rotate(90deg)';
     }, 10);
 }
+// Esta función asume que cada carta se añade a un div con la clase "card-holder-player1"
+function addCardToPlayer1() {
+  const player1Hand = document.getElementById('player1Row1');
+  const cards = player1Hand.getElementsByClassName('card');
+  const maxCards = 100; // Asumimos un máximo de 10 cartas en la mano
+
+  if (cards.length < maxCards) {
+      const newCard = document.createElement('div');
+      newCard.className = 'card';
+      newCard.style.backgroundImage = "url('./Carta/Carta1.png')"; // Usa la ruta correcta para la imagen de tu carta nueva
+      player1Hand.appendChild(newCard);
+      console.log(`Card added. Total cards: ${cards.length + 1}`);
+  } else {
+      console.log("Maximum number of cards reached.");
+  }
+}
+
+// Esta función asume que cada carta se añade a un div con la clase "card-holder-player1"
+function addCardToPlayer2() {
+  const player1Hand = document.getElementById('player2Row1');
+  const cards = player1Hand.getElementsByClassName('card');
+  const maxCards = 100; // Asumimos un máximo de 10 cartas en la mano
+
+  if (cards.length < maxCards) {
+      const newCard = document.createElement('div');
+      newCard.className = 'card';
+      newCard.style.backgroundImage = "url('./Carta/Carta1.png')"; // Usa la ruta correcta para la imagen de tu carta nueva
+      player1Hand.appendChild(newCard);
+      console.log(`Card added. Total cards: ${cards.length + 1}`);
+  } else {
+      console.log("Maximum number of cards reached.");
+  }
+}
 
 // Posicionar la mano del jugador 1
 const player1Hand = document.getElementById('player1Row1');
@@ -155,6 +188,8 @@ const player2Hand = document.getElementById('player2Row1');
 player2Hand.style.position = 'absolute';
 player2Hand.style.bottom = '-253px'; // Ajustar la posición vertical según sea necesario
 player2Hand.style.right = '-173px'; // Ajustar la posición horizontal según sea necesario
+
+
 
 
 
