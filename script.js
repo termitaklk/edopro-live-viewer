@@ -177,6 +177,43 @@ function addCardToPlayer2() {
   }
 }
 
+var maxLP = 8000; // Establecer el máximo de puntos de vida
+var player1LP = 8000; // Establecer los puntos de vida iniciales del jugador 1
+
+
+// Obtener el botón de incrementar LP y agregar un event listener
+document.getElementById('increaseLPButton').addEventListener('click', function() {
+  increaseLP(100); // Aumentar los LP en 100
+});
+
+// Obtener el botón de decrementar LP y agregar un event listener
+document.getElementById('decreaseLPButton').addEventListener('click', function() {
+  decreaseLP(100); // Disminuir los LP en 100
+});
+
+// Función para aumentar los LP y actualizar la barra de LP
+function increaseLP(amount) {
+  player1LP += amount; // Aumentar los LP por la cantidad especificada
+  updateLPBar(); // Actualizar la barra de LP
+}
+
+// Función para disminuir los LP y actualizar la barra de LP
+function decreaseLP(amount) {
+  player1LP -= amount; // Disminuir los LP por la cantidad especificada
+  if (player1LP < 0) {
+      player1LP = 0; // Asegurar que los LP no sean negativos
+  }
+  updateLPBar(); // Actualizar la barra de LP
+}
+
+// Función para actualizar la barra de LP
+function updateLPBar() {
+  var lpBarFill = document.getElementById('player1LPFill');
+  var lpPercentage = (player1LP / maxLP) * 100; // Calcular el porcentaje de LP restantes
+  lpBarFill.style.width = lpPercentage + '%'; // Actualizar el ancho de la barra de LP
+}
+
+
 // Posicionar la mano del jugador 1
 const player1Hand = document.getElementById('player1Row1');
 player1Hand.style.position = 'absolute';
@@ -188,6 +225,7 @@ const player2Hand = document.getElementById('player2Row1');
 player2Hand.style.position = 'absolute';
 player2Hand.style.bottom = '-253px'; // Ajustar la posición vertical según sea necesario
 player2Hand.style.right = '-173px'; // Ajustar la posición horizontal según sea necesario
+
 
 
 

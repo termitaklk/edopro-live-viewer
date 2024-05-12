@@ -4,37 +4,39 @@ html {
 
 body {
   display: flex;
-  flex-direction: column; /* Organiza los elementos verticalmente */
+  flex-direction: column; 
   justify-content: center;
   align-items: center;
   height: 100vh;
-  margin: 0;
+  margin: 0; 
   padding: 0;
   background-color: #0c0c0c;
-  overflow: hidden;
+  overflow: hidden; 
+}
+
+/* Establece un espacio en la parte superior del cuerpo */
+body > * {
+  margin-top: -20px; /* Espacio entre el borde superior y el contenido */
 }
 
 .board {
   display: grid;
-  grid-template-columns: repeat(5, 1fr); /* 5 columnas */
-  gap: 10px; /* Espacio entre celdas */
+  grid-template-columns: repeat(5, 1fr); 
+  gap: 10px; 
   margin-top: 20px;
-  width: 80vw;
-  max-width: 512px;
-  /* Tablero máximo de 512px de ancho */
-  height: calc(80vw * 0.8);
-  /* Mantiene la proporción de 512x410 (aproximadamente) */
-  max-height: calc(512px * 0.8);
-  /* Altura máxima de 80% del ancho */
+  width: 80vw; 
+  max-width: 512px; 
+  height: calc(80vw * 0.8); 
+  max-height: 410px; 
   background-image: url('./Tablero/Tablero1.png');
   background-size: cover;
-  position: relative;
   transform-style: preserve-3d;
   transform: perspective(600px) rotateX(37deg);
   /* Perspectiva y rotación aplicadas juntas */
-  position: relative;
+  position: absolute;
   border: 3px solid #2be2e9;
-  z-index: 1; /* Un z-index más bajo que el de las cartas */
+  z-index: 1; 
+  margin: 0 auto; 
 }
 
 .coverA {
@@ -244,28 +246,27 @@ body {
 .card-row {
   display: flex;
   justify-content: center;
-  /*margin: 75px 0;*/
   margin-bottom: 1rem;
 }
 
 .card-holder-player1 {
   display: flex;
   justify-content: center;
-  z-index: 2; /* Un z-index más alto para que las cartas aparezcan por encima del tablero */
-  width: 241px; /* o el tamaño deseado para las cartas */
-  height: 70px; /* o el tamaño deseado para las cartas */
+  z-index: 2; 
+  width: 241px; 
+  height: 70px; 
   background-size: cover;
-  margin: 0 2px; /* Espacio entre cartas */
+  margin: 0 2px; 
 }
 
 .card-holder-player2 {
   display: flex;
   justify-content: center;
-  z-index: 2; /* Un z-index más alto para que las cartas aparezcan por encima del tablero */
-  width: 345px; /* o el tamaño deseado para las cartas */
-  height: 70px; /* o el tamaño deseado para las cartas */
+  z-index: 2; 
+  width: 345px; 
+  height: 70px; 
   background-size: cover;
-  margin: 0 2px; /* Espacio entre cartas */
+  margin: 0 2px; 
 }
 
 .card {
@@ -277,15 +278,15 @@ body {
   border-radius: 3px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   background-color: #ccc;
-  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), top 0.5s cubic-bezier(0.22, 1, 0.36, 1), left 0.5s cubic-bezier(0.22, 1, 0.36, 1); /* Añade una transición suave */
-  will-change: transform, top, left; /* Optimiza las propiedades que van a cambiar */
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), top 0.5s cubic-bezier(0.22, 1, 0.36, 1), left 0.5s cubic-bezier(0.22, 1, 0.36, 1); 
+  will-change: transform, top, left; 
   border: 1.5px solid #f3efef;
-  z-index: 2; /* Un z-index más alto para que las cartas aparezcan por encima del tablero */
+  z-index: 2; 
 }
 
 .card.moving {
     transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-    box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.3); /* Sombra para efecto de elevación */
+    box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.3); 
 }
 
 .player1 {
@@ -310,27 +311,161 @@ body {
   z-index: 2;
 }
 .container {
+  width: 80%; 
+  max-width: 600px; 
+  aspect-ratio: 16 / 9; 
+  background-color: white; 
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
 .cell {
-  width: 100px; /* Tamaño de cada celda */
-  height: 100px; /* Tamaño de cada celda */
-  border: 1px solid #ddd; /* Borde para las celdas */
+  width: 100px; 
+  height: 100px;
+  border: 1px solid #ddd; 
 }
 
 button {
-  margin-top: 0px; /* Espacio encima de los botones */
+  margin-top: 200px; 
 }
 
 #buttonContainer {
   display: flex;
-  justify-content: center; /* Centra los botones horizontalmente */
-  width: 100%; /* Asume todo el ancho disponible */
-  flex-direction: column; /* Organiza los botones verticalmente */
-  align-items: center; /* Centra los botones */
-  position: absolute;
-  top: 20px; /* Posición desde la parte superior de la ventana */
+  justify-content: center; 
+  align-items: center; 
+  width: 150%; 
+  flex-direction: row; 
+  position: relative;
+  top: -235px; 
+  z-index: 2;
 }
+
+/* Estilos para el contenedor principal */
+#lpContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: -360px; 
+  left: 0px; 
+  right: 100px; 
+  height: 100px;
+  border: 0.5px solid #2be2e9;
+  padding: 0 1px;
+  box-sizing: border-box;
+  width: 700px; 
+  margin: 0 auto; 
+  position: relative;
+  z-index: 1;
+}
+
+
+.lp-bar-container-left {
+  width: 80%; 
+  height: 25px; 
+  background-color: #333;
+  border-radius: 5px;
+  flex: 1.1; 
+  margin: 0 20px; 
+  margin-top: -50px;
+  z-index: 2;
+}
+
+.lp-bar-container-right {
+  width: 55%; 
+  height: 25px; 
+  background-color: #333;
+  border-radius: 5px;
+  flex: 1; 
+  margin: 0 160px; 
+  margin-top: -50px;
+  z-index: 2;
+}
+
+.lp-bar {
+  width: 400%;
+  height: 100%;
+  background-color: #f00; 
+  border-radius: 5px;
+  z-index: 2;
+}
+
+.lp-bar-fill {
+  height: 400%;
+  height: 100%;
+  background-color: #0f0; 
+  border-radius: 5px;
+  z-index: 2;
+}
+
+.image-container-left, .image-container-right {
+  height: 90px; 
+  width: auto; 
+  padding: 0 0.3px; 
+}
+
+.image-container-left img, .image-container-right img {
+  max-height: 118%; 
+  max-width: 88%; 
+  height: auto; 
+  width: auto; 
+}
+
+#scoreText {
+  position: absolute;
+  top: 80px;
+  left: 55%;
+  transform: translateX(-50%);
+  z-index: 2;
+  color: white;
+  font-size: 1rem;
+}
+
+#playerm1 {
+  position: absolute;
+  top: 50px;
+  left: 25%;
+  transform: translateX(-50%);
+  z-index: 2;
+  color: white;
+  font-size: 1rem;
+}
+
+#playerm2 {
+  position: absolute;
+  top: 50px;
+  left: 81%;
+  transform: translateX(-50%);
+  z-index: 2;
+  color: white;
+  font-size: 1rem;
+}
+
+.score-1 {
+  position: absolute;
+  top: 58%;
+  left: 54.7%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem; 
+  color: rgb(0, 247, 255); 
+}
+
+#player2score {
+  position: absolute;
+  top: 58%;
+  left: 67%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem; 
+  color: rgba(0, 255, 55, 0.911); 
+}
+
+#player1score {
+  position: absolute;
+  top: 58%;
+  left: 43%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem; 
+  color: rgba(0, 255, 55, 0.911); 
+}
+
