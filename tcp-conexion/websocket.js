@@ -9,12 +9,13 @@ wss.on('connection', (ws) => {
     });
 });
 
-function broadcast(message) {
+function broadcast(message, uniqueId) {
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(message);
+            client.send(JSON.stringify({ message, uniqueId }));
         }
     });
 }
 
 module.exports = { broadcast };
+

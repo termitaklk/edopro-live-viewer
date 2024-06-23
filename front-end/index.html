@@ -97,6 +97,9 @@
     
     <script src="script.js"></script>
     <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const uniqueId = urlParams.get('id');
+
         const socket = new WebSocket('ws://localhost:8080');
 
         socket.addEventListener('open', function (event) {
@@ -104,7 +107,8 @@
         });
 
         socket.addEventListener('message', function (event) {
-            if (event.data === 'close') {
+            const data = JSON.parse(event.data);
+            if (data.message === 'close' && data.uniqueId === uniqueId) {
                 window.close();
             }
         });

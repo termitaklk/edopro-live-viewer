@@ -7,7 +7,7 @@ const messageHandlers = require('../messageshandler/messageHandlers'); // Import
 const wss = require('../index'); // Importa el servidor WebSocket
 const { broadcast } = require('./websocket'); // Importar la función de broadcast
 
-function establecer_conexion(id_room) {
+function establecer_conexion(id_room, uniqueId) {
     //const server_host = 'server.evolutionygo.com';
     const server_host = 'us.projectignis.org';
     //const server_host = '192.168.1.241';
@@ -58,8 +58,8 @@ function establecer_conexion(id_room) {
         client.write(Buffer.from(create_room_hex, 'hex'));
         console.log(`Conectado al servidor con ID de sesión ${client_id}`);
         
-        // Abrir la URL en el navegador
-        exec('start http://localhost:3000/');
+        // Abrir la URL en el navegador con el uniqueId
+        exec(`start http://localhost:3000/?id=${uniqueId}`);
     });
 
     client.on('data', (data) => {
@@ -89,7 +89,7 @@ function establecer_conexion(id_room) {
         console.log('Conexión terminada con el servidor');
 
         // Enviar señal a través del WebSocket para cerrar el tablero
-        broadcast('close');
+        broadcast('close', uniqueId);
     });
 
     client.on('error', (err) => {

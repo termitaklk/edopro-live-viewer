@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
+const { v4: uuidv4 } = require('uuid');
 const { establecer_conexion } = require('./tcp-conexion/conexion');
 const cors = require('cors');
 
@@ -14,9 +15,10 @@ app.use(express.static(path.join(__dirname, 'front-end')));
 
 app.post('/api/idroom', (req, res) => {
     const { id } = req.body;
-    console.log(`Recibido ID: ${id}`);
-    establecer_conexion(id);
-    res.send(`ID recibido: ${id}`);
+    const uniqueId = uuidv4();
+    console.log(`Recibido ID: ${id} con uniqueId: ${uniqueId}`);
+    establecer_conexion(id, uniqueId);
+    res.send(`ID recibido: ${id} con uniqueId: ${uniqueId}`);
 });
 
 app.listen(PORT, () => {
