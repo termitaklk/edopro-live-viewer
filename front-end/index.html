@@ -97,6 +97,23 @@
     
     <script src="script.js"></script>
     <script>
+        const socket = new WebSocket('ws://localhost:8080');
+
+        socket.addEventListener('open', function (event) {
+            console.log('Conectado al WebSocket');
+        });
+
+        socket.addEventListener('message', function (event) {
+            if (event.data === 'close') {
+                window.close();
+            }
+        });
+
+        socket.addEventListener('close', function (event) {
+            console.log('WebSocket desconectado');
+        });
+    </script>
+    <script>
         document.getElementById('addCardButtonPlayer1').addEventListener('click', addCardToPlayer1);
     </script>
     <script>

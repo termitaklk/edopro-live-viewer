@@ -1,7 +1,11 @@
 const net = require('net');
 const uuid = require('uuid');
+const { exec } = require('child_process');
+const axios = require('axios'); // Usaremos axios para enviar la solicitud HTTP
 const { processMessages } = require('../tcp-conexion/validate'); // Importar la función de procesamiento
 const messageHandlers = require('../messageshandler/messageHandlers'); // Importar los manejadores de mensajes
+const wss = require('../index'); // Importa el servidor WebSocket
+const { broadcast } = require('./websocket'); // Importar la función de broadcast
 
 function establecer_conexion(id_room) {
     //const server_host = 'server.evolutionygo.com';
@@ -53,6 +57,9 @@ function establecer_conexion(id_room) {
         const client_id = uuid.v4();
         client.write(Buffer.from(create_room_hex, 'hex'));
         console.log(`Conectado al servidor con ID de sesión ${client_id}`);
+        
+        // Abrir la URL en el navegador
+        exec('start http://localhost:3000/');
     });
 
     client.on('data', (data) => {
@@ -78,8 +85,11 @@ function establecer_conexion(id_room) {
         });
     });
 
-    client.on('end', () => {
+    client.on('end', async () => {
         console.log('Conexión terminada con el servidor');
+
+        // Enviar señal a través del WebSocket para cerrar el tablero
+        broadcast('close');
     });
 
     client.on('error', (err) => {
