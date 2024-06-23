@@ -1,110 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <title>YGOPro Live</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enviar ID a la API</title>
 </head>
-
 <body>
-    <!-- Contenedor de botones -->
-    <div id="buttonContainer">
-        <button id="playCardMonstersButton">Play Card Monsters</button>
-        <button id="playCardButton">Play Card Magias/Trampas</button>
-        <button id="playCardMonstersHorizontalButton">Monster Set</button>
-        <button id="addCardButtonPlayer1">Draw Player 1</button>
-        <button id="addCardButtonPlayer2">Draw Player 2</button>
-        <button id="increaseLPButton">Incrementar LP</button>
-        <button id="decreaseLPButton">Decrementar LP</button>
-    </div>
+    <h1>Enviar ID a la API</h1>
+    <form id="idForm">
+        <label for="idInput">ID:</label>
+        <input type="text" id="idInput" name="id">
+        <button type="submit">Enviar</button>
+    </form>
+    <div id="result"></div>
 
-    <!-- Jugador 1 -->
-    <div class="card-row player1">
-        <div id="player1Row1" class="card-holder-player1">
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-        </div>
-    </div>
-
-    <!-- Jugador 2 -->
-    <div class="card-row player2">
-        <div id="player2Row1" class="card-holder-player2">
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-            <div class="card" style="background-image: url('./Carta/Carta1.png');"></div>
-        </div>
-    </div>
-
-    <!-- Tablero -->
-    <div class="board">
-        <div id="a1" class="cell"></div>
-        <div id="a2" class="cell"></div>
-        <div id="a3" class="cell"></div>
-        <div id="a4" class="cell"></div>
-        <div id="a5" class="cell"></div>
-        <div id="b1" class="cell"></div>
-        <div id="b2" class="cell"></div>
-        <div id="b3" class="cell"></div>
-        <div id="b4" class="cell"></div>
-        <div id="b5" class="cell"></div>
-        <div id="c1" class="cell"></div>
-        <div id="c2" class="cell"></div>
-        <div id="c3" class="cell"></div>
-        <div id="c4" class="cell"></div>
-        <div id="c5" class="cell"></div>
-        <div id="d1" class="cell"></div>
-        <div id="d2" class="cell"></div>
-        <div id="d3" class="cell"></div>
-        <div id="d4" class="cell"></div>
-        <div id="d5" class="cell"></div>
-        <div id="coverA" class="coverA"></div>
-        <div id="coverB" class="coverB"></div>
-    </div>
-    <!-- Contenedor principal -->
-    <div id="lpContainer">
-        <!-- Contenedor de imagen izquierda -->
-        <div class="image-container-left">
-            <img src="./Avatars/yaden.png" alt="Left Image">
-        </div>
-        <!-- Barra de LP izquierda -->
-        <div class="lp-bar-container-left">
-            <div class="lp-bar" id="lpBarLeft"></div>
-        </div>
-          <!-- Texto del marcador -->
-        <div id="playerm1">Player A</div>
-        <div id="player1score">( 1 )</div>
-        <div id="scoreText">TURNO</div>
-        <div id="player2score">( 1 )</div>
-        <div id="playerm2">Player B</div>
-        <div class="score-1">[ 1 ]</div>
-        <!-- Barra de LP derecha -->
-        <div class="lp-bar-container-right">
-            <div class="lp-bar" id="lpBarRight"></div>
-        </div>
-        <!-- Contenedor de imagen derecha -->
-        <div class="image-container-right">
-            <img src="./Avatars/yusei.png" alt="Right Image">
-        </div>
-    </div>
-    
-    <script src="script.js"></script>
     <script>
-        document.getElementById('addCardButtonPlayer1').addEventListener('click', addCardToPlayer1);
-    </script>
-    <script>
-        document.getElementById('addCardButtonPlayer2').addEventListener('click', addCardToPlayer2);
-    </script>
-    <script>
-        
+        document.getElementById('idForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const id = document.getElementById('idInput').value;
+            const response = await fetch('http://localhost:3000/api/idroom', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: id })
+            });
+            const result = await response.text();
+            document.getElementById('result').innerText = result;
+        });
     </script>
 </body>
-
 </html>
+
