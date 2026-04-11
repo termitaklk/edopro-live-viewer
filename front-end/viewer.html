@@ -1,0 +1,3787 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>YGOPro Live</title>
+    <style>
+        :root {
+            --panel: rgba(10, 10, 16, 0.92);
+            --panel-border: #4a3570;
+            --text: #f3f3f7;
+            --muted: #c2bed3;
+            --accent: #9b5cff;
+            --accent-2: #6c35c9;
+            --button-text: #ffffff;
+            --board-angle: 0deg;
+            --field-card-angle: 0deg;
+            --side-panel-bottom-gap: 170px;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #0c0c0c;
+        }
+
+        body {
+            display: block !important;
+        }
+
+        body > * {
+            margin-top: 0 !important;
+        }
+
+        #viewerStage {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        /* SUCCESS REFERENCE (EXTERNAL FRAME COMPACT):
+           External container locked for lobby/duel visual bounds.
+           Keep this in sync with visor-layout-guard.test.js */
+        #viewerRoot {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 1360px;
+            height: 760px;
+            overflow: hidden;
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                radial-gradient(circle at top right, rgba(255, 153, 0, 0.1), transparent 24%),
+                radial-gradient(circle at left, rgba(255, 0, 0, 0.08), transparent 20%),
+                rgba(8, 10, 16, 0.94);
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48);
+            transform: translate(-50%, -50%) scale(var(--viewer-scale, 1));
+            transform-origin: center center;
+            will-change: transform;
+        }
+
+        #viewerRoot.waiting-mode {
+            width: 1120px;
+            height: 640px;
+        }
+
+        /* SUCCESS REFERENCE (THREE-PANE LAYOUT):
+           Left=Card Detail | Center=Board | Right=Live Duel State
+           Side panels stop above hand/phase zone (bottom gap). */
+        #viewerLayout {
+            position: absolute;
+            inset: 12px;
+            display: grid;
+            grid-template-columns: 240px minmax(0, 1fr) 286px;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        /* 1x3 hard separation: Card Detail | Board | Live Duel */
+        #viewerLayout > #cardPanel,
+        #viewerLayout > #centerPane,
+        #viewerLayout > #livePanel {
+            min-width: 0;
+        }
+
+        #viewerRoot.waiting-mode #viewerLayout {
+            grid-template-columns: minmax(560px, 760px) 300px;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        #viewerRoot.waiting-mode #cardPanel {
+            display: none !important;
+        }
+
+        #viewerRoot.waiting-mode #centerPane {
+            grid-column: 1;
+            max-width: 760px;
+        }
+
+        #viewerRoot.waiting-mode #livePanel {
+            grid-column: 2;
+            height: calc(100% - 2px);
+            max-height: calc(100% - 2px);
+            margin-top: 1px;
+        }
+
+        #centerPane {
+            position: relative;
+            min-width: 0;
+            overflow: clip;
+            contain: layout paint;
+            border-radius: 14px;
+        }
+
+        #duelWindow {
+            position: absolute;
+            inset: 0;
+            transform: none;
+            width: 100%;
+            height: 100%;
+            border-radius: 0;
+            overflow: hidden;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+            z-index: 20;
+        }
+
+        #duelWindowBar {
+            display: none;
+        }
+
+        #duelWindowBody {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        #duelStage {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            padding: 0 20px;
+            box-sizing: border-box;
+            border-radius: 12px;
+            contain: layout paint;
+        }
+
+        #buttonContainer {
+            display: none !important;
+        }
+
+        #waitingLobby {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9998;
+            background:
+                radial-gradient(circle at top right, rgba(255, 153, 0, 0.22), transparent 22%),
+                radial-gradient(circle at left, rgba(255, 0, 0, 0.2), transparent 20%),
+                linear-gradient(180deg, rgba(7, 7, 12, 0.88), rgba(7, 7, 12, 0.94));
+        }
+
+        #viewerRoot.waiting-mode #waitingLobby {
+            align-items: center;
+            padding-top: 0;
+        }
+
+        .lobby-shell {
+            width: min(760px, calc(100% - 18px));
+            max-height: min(520px, calc(100% - 28px));
+            overflow: auto;
+            border: 2px solid var(--panel-border);
+            border-radius: 14px;
+            background: var(--panel);
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+            padding: 18px 20px;
+            color: var(--text);
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .lobby-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 18px;
+        }
+
+        @media (max-width: 1240px) {
+            .lobby-shell {
+                width: calc(100% - 24px);
+                max-height: calc(100% - 20px);
+                padding: 16px;
+            }
+
+            .lobby-grid {
+                grid-template-columns: 1fr;
+                gap: 14px;
+            }
+
+            #viewerRoot.waiting-mode #viewerLayout {
+                grid-template-columns: 1fr;
+                grid-template-rows: minmax(0, 1fr) 260px;
+            }
+
+            #viewerRoot.waiting-mode #centerPane {
+                grid-column: 1;
+                grid-row: 1;
+            }
+
+            #viewerRoot.waiting-mode #livePanel {
+                grid-column: 1;
+                grid-row: 2;
+                height: 100%;
+                max-height: 100%;
+            }
+        }
+
+        .lobby-title {
+            margin: 0 0 12px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .slot-list {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .slot {
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0 12px;
+            color: var(--text);
+        }
+
+        .slot.empty {
+            opacity: 0.45;
+        }
+
+        .lobby-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-top: 16px;
+        }
+
+        .lobby-btn {
+            border: 0;
+            border-radius: 8px;
+            padding: 10px 18px;
+            color: var(--button-text);
+            background: linear-gradient(180deg, var(--accent), var(--accent-2));
+            font-weight: 700;
+        }
+
+        .lobby-meta {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--muted);
+        }
+
+        .lobby-meta strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.12);
+            margin: 12px 0;
+        }
+
+        #livePanel {
+            position: relative;
+            width: 100%;
+            height: calc(100% - var(--side-panel-bottom-gap));
+            max-height: calc(100% - var(--side-panel-bottom-gap));
+            align-self: start;
+            overflow: auto;
+            background: rgba(8, 11, 18, 0.92);
+            color: #e6edf3;
+            border: 1px solid #2f3945;
+            border-radius: 14px;
+            padding: 14px;
+            z-index: 9999;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+            box-sizing: border-box;
+        }
+
+        #cardPanel {
+            position: relative;
+            width: 100%;
+            height: calc(100% - var(--side-panel-bottom-gap));
+            max-height: calc(100% - var(--side-panel-bottom-gap));
+            align-self: start;
+            overflow: hidden;
+            background: rgba(8, 11, 18, 0.94);
+            color: #e6edf3;
+            border: 1px solid #2f3945;
+            border-radius: 14px;
+            padding: 14px;
+            z-index: 9999;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #cardPanel h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+        }
+
+        #cardPreview {
+            display: block;
+            width: min(100%, 177px);
+            height: auto;
+            aspect-ratio: 177 / 254;
+            object-fit: contain;
+            object-position: center;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            margin-bottom: 10px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        #cardPanelName {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff3a5;
+            margin-bottom: 8px;
+        }
+
+        #cardPanelMeta {
+            font-size: 12px;
+            line-height: 1.45;
+            color: #9ec5fe;
+            margin-bottom: 10px;
+        }
+
+        #cardPanelDesc {
+            white-space: pre-wrap;
+            font-size: 13px;
+            line-height: 1.55;
+            color: #e6edf3;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            padding: 10px;
+            flex: 1 1 auto;
+            min-height: 120px;
+            overflow: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(156, 184, 255, 0.7) rgba(9, 13, 20, 0.9);
+        }
+
+        #cardPanelDesc::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        #cardPanelDesc::-webkit-scrollbar-track {
+            background: rgba(9, 13, 20, 0.9);
+            border-radius: 10px;
+        }
+
+        #cardPanelDesc::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, rgba(110, 168, 254, 0.8), rgba(111, 66, 193, 0.85));
+            border-radius: 10px;
+            border: 2px solid rgba(9, 13, 20, 0.9);
+        }
+
+        #livePanel h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+        }
+
+        #livePanel .meta {
+            font-size: 13px;
+            color: #9aa6b2;
+            line-height: 1.45;
+            margin-bottom: 12px;
+        }
+
+        #cardDebug {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            font-size: 12px;
+            line-height: 1.45;
+            background: rgba(255, 213, 143, 0.08);
+            color: #ffd58f;
+            border: 1px solid rgba(255, 213, 143, 0.2);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        #lastCardId {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            font-size: 12px;
+            line-height: 1.45;
+            background: rgba(110, 168, 254, 0.08);
+            color: #9ec5fe;
+            border: 1px solid rgba(110, 168, 254, 0.2);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        #lastImagePath {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            font-size: 12px;
+            line-height: 1.45;
+            background: rgba(25, 135, 84, 0.08);
+            color: #93e9be;
+            border: 1px solid rgba(25, 135, 84, 0.2);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        #liveLog {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            font-size: 12px;
+            line-height: 1.45;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            padding: 10px;
+            min-height: 160px;
+        }
+
+        #graveModal {
+            position: absolute;
+            inset: 0;
+            z-index: 12000;
+        }
+
+        #graveModalBackdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.62);
+        }
+
+        /* SUCCESS REFERENCE (GRAVE VIEWER SINGLE ROW): compact modal, one-row cards, horizontal scroll */
+        #graveModalDialog {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: min(900px, calc(100% - 120px));
+            height: 294px;
+            max-height: 294px;
+            background: rgba(14, 12, 22, 0.96);
+            border: 2px solid #4a3570;
+            border-radius: 16px;
+            box-shadow: 0 26px 80px rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #graveModalHeader {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+            padding: 4px 2px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            flex: 0 0 auto;
+        }
+
+        #graveModalActions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #graveModalTitle {
+            font: 700 18px/1.2 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+        }
+
+        #graveSizeToggle,
+        #graveModalClose {
+            width: auto;
+            min-width: 92px;
+            margin: 0;
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: linear-gradient(180deg, #5f2d92, #2a163d);
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #graveModalCards {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 8px;
+            padding: 8px 2px 2px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex: 1 1 auto;
+            align-items: flex-start;
+            height: 214px;
+            max-height: 214px;
+        }
+
+        #graveModalCards.grave-size-large {
+            gap: 10px;
+        }
+
+        #graveModalCards.grave-size-large .grave-card {
+            width: 140px;
+            min-width: 140px;
+        }
+
+        .grave-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 6px;
+            cursor: pointer;
+            width: 112px;
+            min-width: 112px;
+            flex: 0 0 auto;
+        }
+
+        .grave-card img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 177 / 254;
+            object-fit: contain;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .grave-card-title {
+            font-size: 11px;
+            line-height: 1.3;
+            margin-top: 4px;
+            color: #fff;
+            text-align: center;
+            word-break: break-word;
+        }
+
+        .grave-slot-card {
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            width: 72% !important;
+            height: 88% !important;
+            transform: translate(-50%, -50%) !important;
+            filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
+            z-index: 12 !important;
+        }
+
+        .grave-slot-card img,
+        .grave-slot-card canvas {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+            transform: none !important;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .cell.debug-target {
+            outline: 3px solid #ff3b3b !important;
+            box-shadow: 0 0 18px rgba(255, 59, 59, 0.95) !important;
+            background-color: rgba(255, 59, 59, 0.12) !important;
+        }
+
+        .field-card {
+            transition: transform 220ms ease, filter 220ms ease;
+            filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.4));
+            width: auto;
+            height: 102%;
+            aspect-ratio: 177 / 254;
+            max-width: none;
+            left: 50% !important;
+            top: -1% !important;
+            transform-origin: center center;
+            pointer-events: auto;
+            backface-visibility: hidden;
+            -webkit-font-smoothing: antialiased;
+            will-change: transform;
+        }
+
+        .field-card img,
+        .field-card canvas {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            object-position: center center !important;
+            background: transparent !important;
+            image-rendering: auto;
+            backface-visibility: hidden;
+            transform: translateZ(0) rotateZ(var(--field-card-angle));
+            transform-origin: center center;
+        }
+
+        .field-card.field-top {
+            transform: translateX(-50%);
+            filter: brightness(1.08) saturate(1.08) drop-shadow(0 14px 20px rgba(0, 0, 0, 0.42));
+        }
+
+        .field-card.field-bottom {
+            transform: translateX(-50%);
+            filter: brightness(1.05) saturate(1.06) drop-shadow(0 14px 20px rgba(0, 0, 0, 0.42));
+        }
+
+        .field-card.selected-card {
+            outline: none;
+            box-shadow: 0 14px 22px rgba(0, 0, 0, 0.45);
+        }
+
+        .field-card.field-facedown {
+            filter: brightness(0.96) drop-shadow(0 14px 20px rgba(0, 0, 0, 0.42));
+        }
+
+        .field-card.field-defense.field-top {
+            transform: translateX(-50%) rotate(90deg) scale(0.92);
+        }
+
+        .field-card.field-defense.field-bottom {
+            transform: translateX(-50%) rotate(-90deg) scale(0.92);
+        }
+
+        #player1Container,
+        #player2Container {
+            position: absolute !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            width: 520px;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        #player1Container {
+            top: 104px !important;
+        }
+
+        #player2Container {
+            bottom: 14px !important;
+            top: auto !important;
+        }
+
+        #player1Row1,
+        #player2Row1 {
+            position: static !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 92px;
+            display: flex !important;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 14px;
+            background: rgba(7, 10, 16, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+        }
+
+        #player1Row1 .card,
+        #player2Row1 .card {
+            width: 52px !important;
+            height: 76px !important;
+            margin: 0 !important;
+            position: static !important;
+        }
+
+        .shuffle-card {
+            transition: transform 560ms cubic-bezier(0.22, 0.78, 0.18, 1), filter 320ms ease, opacity 320ms ease;
+            will-change: transform;
+        }
+
+        #phaseBar {
+            position: absolute;
+            left: 50%;
+            bottom: 120px;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            z-index: 65;
+            pointer-events: auto;
+        }
+
+        .phase-btn {
+            min-width: 56px;
+            height: 28px;
+            padding: 0 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 8px;
+            background: linear-gradient(180deg, #5f2d92, #2a163d);
+            color: #fff;
+            font: 700 14px/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+        }
+
+        .phase-btn:hover {
+            filter: brightness(1.08);
+        }
+
+        .phase-btn.active {
+            border-color: rgba(146, 245, 255, 0.9);
+            box-shadow: 0 0 0 1px rgba(146, 245, 255, 0.28), 0 8px 16px rgba(0, 0, 0, 0.34);
+            color: #92f5ff;
+        }
+
+        .phase-btn.phase-hidden-slot {
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        #switchPhaseBtn {
+            min-width: 74px;
+            background: linear-gradient(180deg, #3d557a, #1d2740);
+        }
+
+        .turn-active {
+            color: #92f5ff !important;
+            text-shadow: 0 0 10px rgba(146, 245, 255, 0.45), 0 0 18px rgba(146, 245, 255, 0.22);
+            filter: brightness(1.08);
+        }
+
+        #duelBoard {
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            margin: 0 !important;
+            transform: translate(-50%, -50%) perspective(600px) rotateX(35deg) rotateZ(var(--board-angle)) scale(var(--board-fit-scale, 0.9)) !important;
+            z-index: 10 !important;
+            filter: saturate(1.12) contrast(1.08) brightness(1.02) drop-shadow(0 28px 48px rgba(0, 0, 0, 0.38));
+            transition: transform 680ms cubic-bezier(0.22, 0.78, 0.18, 1), filter 220ms ease;
+        }
+
+        #duelBoard.board-v2 {
+            display: grid !important;
+            grid-template-columns: 82px 1fr 82px;
+            align-items: center;
+            gap: 12px;
+            width: 860px !important;
+            height: 560px !important;
+            max-width: none !important;
+            max-height: none !important;
+            padding: 22px 18px;
+            background:
+                linear-gradient(180deg, rgba(8, 9, 16, 0.65), rgba(5, 7, 12, 0.78));
+            border: 3px solid #2be2e9;
+            border-radius: 8px;
+            transform-style: preserve-3d;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+        }
+
+        #duelBoard.board-v2 .cell,
+        #duelBoard.board-v2 .board-stack {
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+            width: 70px !important;
+            height: 98px !important;
+            margin: 0 !important;
+            transform: none !important;
+            border-radius: 4px;
+            overflow: visible;
+        }
+
+        #duelBoard.board-v2 .cell {
+            border: 1px solid rgba(255, 255, 255, 0.52);
+            background: rgba(4, 5, 12, 0.42);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+        }
+
+        #duelBoard.board-v2 .board-column {
+            display: grid;
+            grid-template-rows: repeat(3, 98px);
+            gap: 16px;
+            justify-items: center;
+            align-content: center;
+        }
+
+        #duelBoard.board-v2 .board-main {
+            display: grid;
+            grid-template-rows: 98px 98px 64px 98px 98px;
+            gap: 12px;
+            align-content: center;
+        }
+
+        #duelBoard.board-v2 .board-row {
+            display: grid;
+            grid-template-columns: repeat(5, 70px);
+            gap: 12px;
+            justify-content: center;
+            position: relative;
+            padding: 10px 12px;
+            border-radius: 10px;
+        }
+
+        #duelBoard.board-v2 .board-row::before {
+            content: '';
+            position: absolute;
+            inset: -12px -20px -24px -20px;
+            border-radius: 14px;
+            pointer-events: none;
+        }
+
+        #duelBoard.board-v2 .board-row-top-spell::before {
+            border: 3px solid rgba(98, 118, 255, 0.95);
+            box-shadow: 0 0 18px rgba(98, 118, 255, 0.24);
+            background: rgba(12, 18, 46, 0.22);
+        }
+
+        #duelBoard.board-v2 .board-row-top-monster::before {
+            border: 3px solid rgba(98, 118, 255, 0.95);
+            box-shadow: 0 0 18px rgba(98, 118, 255, 0.18);
+            background: rgba(12, 18, 46, 0.16);
+        }
+
+        #duelBoard.board-v2 .board-row-bottom-monster::before {
+            border: 3px solid rgba(255, 80, 80, 0.95);
+            box-shadow: 0 0 18px rgba(255, 80, 80, 0.22);
+            background: rgba(46, 12, 18, 0.22);
+        }
+
+        #duelBoard.board-v2 .board-row-bottom-spell::before {
+            border: 3px solid rgba(255, 80, 80, 0.95);
+            box-shadow: 0 0 18px rgba(255, 80, 80, 0.18);
+            background: rgba(46, 12, 18, 0.16);
+        }
+
+        #duelBoard.board-v2 .board-mid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 44px;
+        }
+
+        #duelBoard.board-v2 .board-mid-slot {
+            width: 70px;
+            height: 62px;
+            border: 2px solid #8d35ff;
+            border-radius: 6px;
+            background: rgba(61, 21, 94, 0.24);
+            box-shadow: 0 0 18px rgba(157, 92, 255, 0.28);
+        }
+
+        #duelBoard.board-v2 .board-stack {
+            border: 2px solid rgba(255, 221, 87, 0.8);
+            background: rgba(0, 0, 0, 0.28);
+        }
+
+        #duelBoard.board-v2 .board-stack.deck-slot {
+            background-image: url('./Carta/Carta1.png');
+            background-size: cover;
+            background-position: center;
+        }
+
+        #duelBoard.board-v2 .board-stack.empty-slot {
+            border-color: rgba(90, 255, 124, 0.7);
+            background: rgba(18, 55, 24, 0.2);
+        }
+
+        #duelBoard.board-v2 #graveTop,
+        #duelBoard.board-v2 #graveBottom {
+            border-color: rgba(90, 255, 124, 0.9);
+        }
+
+        /* SUCCESS REFERENCE (LP HUD): centered lane, aligned with hands and board */
+        #lpContainer {
+            position: absolute !important;
+            top: 0 !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            width: 700px !important;
+            min-height: 92px !important;
+            z-index: 78 !important;
+            pointer-events: none !important;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(7, 10, 16, 0.78);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+            box-sizing: border-box;
+            padding: 8px 10px;
+            display: grid !important;
+            grid-template-columns: 56px 230px 88px 230px 56px;
+            grid-template-rows: 30px 24px;
+            column-gap: 8px;
+            row-gap: 4px;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #lpContainer .lp-bar-container-left,
+        #lpContainer .lp-bar-container-right {
+            position: relative;
+            width: 100% !important;
+            height: 24px !important;
+            margin: 0 !important;
+            border-radius: 6px !important;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(42, 10, 10, 0.75);
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        #lpContainer .lp-bar {
+            width: 100%;
+            height: 100%;
+            border-radius: 5px;
+            background: linear-gradient(180deg, #ff3434, #a70000);
+            transition: width 220ms ease;
+            box-sizing: border-box;
+        }
+
+        #lpContainer .lp-bar-value {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font: 800 13px/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        #lpContainer .image-container-left,
+        #lpContainer .image-container-right {
+            width: 56px !important;
+            height: 56px !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            grid-row: 1 / span 2;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        #lpContainer .image-container-left img,
+        #lpContainer .image-container-right img {
+            width: 54px !important;
+            height: 54px !important;
+            object-fit: contain;
+        }
+
+        #lpContainer .image-container-left { grid-column: 1; }
+        #lpContainer .image-container-right { grid-column: 5; }
+        #lpContainer .lp-bar-container-left { grid-column: 2; grid-row: 1; }
+        #lpContainer .lp-bar-container-right { grid-column: 4; grid-row: 1; }
+
+        #lpContainer #playerm1,
+        #lpContainer #playerm2,
+        #lpContainer #player1score,
+        #lpContainer #player2score,
+        #lpContainer #scoreText,
+        #lpContainer .score-1 {
+            position: static !important;
+            transform: none !important;
+            left: auto !important;
+            right: auto !important;
+            top: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            white-space: nowrap;
+            text-align: center;
+            line-height: 1;
+        }
+
+        #lpContainer #playerm1 {
+            grid-column: 2;
+            grid-row: 2;
+            justify-self: start;
+            color: #ffffff;
+            font: 700 14px/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #lpContainer #player1score {
+            grid-column: 2;
+            grid-row: 2;
+            justify-self: end;
+            color: #92f5ff;
+            font: 700 20px/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #lpContainer #playerm2 {
+            grid-column: 4;
+            grid-row: 2;
+            justify-self: end;
+            color: #ffffff;
+            font: 700 14px/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #lpContainer #player2score {
+            grid-column: 4;
+            grid-row: 2;
+            justify-self: start;
+            color: #00ff66;
+            font: 700 20px/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #lpContainer .score-1 {
+            grid-column: 3;
+            grid-row: 1;
+            color: #00d5ff;
+            font: 700 26px/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #lpContainer #scoreText {
+            grid-column: 3;
+            grid-row: 2;
+            color: #ffffff;
+            font: 700 18px/1 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .flying-card {
+            position: fixed !important;
+            z-index: 12000 !important;
+            pointer-events: none !important;
+            transition:
+                left 280ms ease,
+                top 280ms ease,
+                width 280ms ease,
+                height 280ms ease,
+                transform 280ms ease,
+                opacity 280ms ease;
+            transform-origin: center center;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+        }
+
+        #duelWindow.hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="viewerStage">
+        <div id="viewerRoot">
+            <div id="viewerLayout">
+                <div id="cardPanel">
+                    <h3>Card Detail</h3>
+                    <img id="cardPreview" src="./Carta/Carta1.png" alt="Card preview">
+                    <div id="cardPanelName">Waiting for revealed card...</div>
+                    <div id="cardPanelMeta">ID: -</div>
+                    <div id="cardPanelDesc">When a card is revealed or selected on the field, its information will appear here.</div>
+                </div>
+
+                <div id="centerPane">
+                    <div id="waitingLobby">
+                        <div class="lobby-shell">
+                            <div class="lobby-grid">
+                                <div>
+                                    <div class="lobby-title" id="lobbyRoomTitle">Waiting Room</div>
+                                    <div class="slot-list">
+                                        <div class="slot" id="slot0">Host slot</div>
+                                        <div class="slot empty" id="slot1">Waiting for player...</div>
+                                        <div class="slot empty hidden" id="slot2">Waiting for tag player...</div>
+                                        <div class="slot empty hidden" id="slot3">Waiting for tag player...</div>
+                                    </div>
+                                    <div class="lobby-actions">
+                                        <button class="lobby-btn" type="button" id="watcherBtn">Watching</button>
+                                        <button class="lobby-btn" type="button" id="readyBtn">Esperando inicio</button>
+                                    </div>
+                                    <div class="divider"></div>
+                                    <div class="lobby-meta" id="spectatorMeta">Spectators: 0</div>
+                                </div>
+                                <div class="lobby-meta" id="roomMeta">
+                                    Waiting for room info...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="graveModal" class="hidden">
+                        <div id="graveModalBackdrop"></div>
+                        <div id="graveModalDialog">
+                            <div id="graveModalHeader">
+                                <div id="graveModalTitle">Cementerio</div>
+                                <div id="graveModalActions">
+                                    <button type="button" id="graveSizeToggle">Vista: Compacta</button>
+                                    <button type="button" id="graveModalClose">Cerrar</button>
+                                </div>
+                            </div>
+                            <div id="graveModalCards"></div>
+                        </div>
+                    </div>
+
+                    <div id="duelWindow" class="hidden">
+                        <div id="duelWindowBar">
+                            <span>Project Ignis: EDOPro</span>
+                            <div id="duelWindowControls" aria-hidden="true">
+                                <span>&#9472;</span>
+                                <span>&#9633;</span>
+                                <span>&#10005;</span>
+                            </div>
+                        </div>
+                        <div id="duelWindowBody">
+                            <div id="buttonContainer" class="hidden">
+                                <button id="playCardMonstersButton">Play Card Monsters</button>
+                                <button id="playCardButton">Play Card Magias/Trampas</button>
+                                <button id="playCardMonstersHorizontalButton">Monster Set</button>
+                                <button id="addCardButtonPlayer1">Draw Player 1</button>
+                                <button id="addCardButtonPlayer2">Draw Player 2</button>
+                                <button id="increaseLPButton">Incrementar LP</button>
+                                <button id="decreaseLPButton">Decrementar LP</button>
+                            </div>
+
+                            <div id="duelStage">
+                                <div class="card-row player1 hidden" id="player1Container">
+                                    <div id="player1Row1" class="card-holder-player1"></div>
+                                </div>
+
+                                <div class="card-row player2 hidden" id="player2Container">
+                                    <div id="player2Row1" class="card-holder-player2"></div>
+                                </div>
+
+                                <div id="phaseBar" class="hidden">
+                                    <button type="button" class="phase-btn" data-phase-code="m1" id="phaseM1Btn">M 1</button>
+                                    <button type="button" class="phase-btn" data-phase-code="bp" id="phaseBPBtn">B P</button>
+                                    <button type="button" class="phase-btn" data-phase-code="m2" id="phaseM2Btn">M 2</button>
+                                    <button type="button" class="phase-btn" data-phase-code="ep" id="phaseEPBtn">E P</button>
+                                    <button type="button" class="phase-btn" id="switchPhaseBtn">Switch</button>
+                                </div>
+
+                                <div class="board board-v2 hidden" id="duelBoard">
+                    <div class="board-column board-column-left">
+                        <div id="coverA" class="board-stack deck-slot"></div>
+                        <div id="graveTop" class="cell board-stack"></div>
+                        <div class="board-stack empty-slot"></div>
+                    </div>
+                    <div class="board-main">
+                        <div class="board-row board-row-top-spell">
+                            <div id="a1" class="cell"></div>
+                            <div id="a2" class="cell"></div>
+                            <div id="a3" class="cell"></div>
+                            <div id="a4" class="cell"></div>
+                            <div id="a5" class="cell"></div>
+                        </div>
+                        <div class="board-row board-row-top-monster">
+                            <div id="b1" class="cell"></div>
+                            <div id="b2" class="cell"></div>
+                            <div id="b3" class="cell"></div>
+                            <div id="b4" class="cell"></div>
+                            <div id="b5" class="cell"></div>
+                        </div>
+                        <div class="board-mid">
+                            <div class="board-mid-slot"></div>
+                            <div class="board-mid-slot"></div>
+                        </div>
+                        <div class="board-row board-row-bottom-monster">
+                            <div id="d1" class="cell"></div>
+                            <div id="d2" class="cell"></div>
+                            <div id="d3" class="cell"></div>
+                            <div id="d4" class="cell"></div>
+                            <div id="d5" class="cell"></div>
+                        </div>
+                        <div class="board-row board-row-bottom-spell">
+                            <div id="c1" class="cell"></div>
+                            <div id="c2" class="cell"></div>
+                            <div id="c3" class="cell"></div>
+                            <div id="c4" class="cell"></div>
+                            <div id="c5" class="cell"></div>
+                        </div>
+                    </div>
+                    <div class="board-column board-column-right">
+                        <div class="board-stack empty-slot"></div>
+                        <div id="graveBottom" class="cell board-stack"></div>
+                        <div id="coverB" class="board-stack deck-slot"></div>
+                    </div>
+                                </div>
+
+                                <div id="lpContainer" class="hidden">
+                                    <div class="image-container-left">
+                                        <img src="./Avatars/yaden.png" alt="Left Image">
+                                    </div>
+                                    <div class="lp-bar-container-left">
+                                        <div class="lp-bar-value" id="lpBarValueLeft">8000</div>
+                                        <div class="lp-bar" id="lpBarLeft"></div>
+                                    </div>
+                                    <div id="playerm1">Player A</div>
+                                    <div id="player1score">( 1 )</div>
+                                    <div id="scoreText">TURNO</div>
+                                    <div id="player2score">( 1 )</div>
+                                    <div id="playerm2">Player B</div>
+                                    <div class="score-1">[ 1 ]</div>
+                                    <div class="lp-bar-container-right">
+                                        <div class="lp-bar-value" id="lpBarValueRight">8000</div>
+                                        <div class="lp-bar" id="lpBarRight"></div>
+                                    </div>
+                                    <div class="image-container-right">
+                                        <img src="./Avatars/yusei.png" alt="Right Image">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="livePanel">
+                    <h3>Live Duel State</h3>
+                    <div id="liveMeta" class="meta">Waiting for events...</div>
+                    <div id="lastCardId">Last valid card id: none</div>
+                    <div id="lastImagePath">Last image path: none</div>
+                    <div id="cardDebug">Last card event: waiting...</div>
+                    <div id="liveLog"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script src="./js/viewer-lobby-mode.js"></script>
+    <script src="./js/viewer-duel-mode.js"></script>
+    <script src="./js/viewer-board-mode.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const uniqueId = urlParams.get('id');
+        const initialView = (urlParams.get('view') || 'waiting').toLowerCase();
+        const events = new EventSource('/events');
+        const viewerStage = document.getElementById('viewerStage');
+        const viewerRoot = document.getElementById('viewerRoot');
+        const centerPane = document.getElementById('centerPane');
+        const liveMeta = document.getElementById('liveMeta');
+        const liveLog = document.getElementById('liveLog');
+        const MAX_LOG_LINES = 140;
+        const lastCardIdBox = document.getElementById('lastCardId');
+        const lastImagePathBox = document.getElementById('lastImagePath');
+        const cardDebug = document.getElementById('cardDebug');
+        const cardPreview = document.getElementById('cardPreview');
+        const cardPanelName = document.getElementById('cardPanelName');
+        const cardPanelMeta = document.getElementById('cardPanelMeta');
+        const cardPanelDesc = document.getElementById('cardPanelDesc');
+        const waitingLobby = document.getElementById('waitingLobby');
+        const duelWindow = document.getElementById('duelWindow');
+        const duelBoard = document.getElementById('duelBoard');
+        const lpContainer = document.getElementById('lpContainer');
+        const lpBarLeft = document.getElementById('lpBarLeft');
+        const lpBarRight = document.getElementById('lpBarRight');
+        const lpBarValueLeft = document.getElementById('lpBarValueLeft');
+        const lpBarValueRight = document.getElementById('lpBarValueRight');
+        const buttonContainer = document.getElementById('buttonContainer');
+        const phaseBar = document.getElementById('phaseBar');
+        const player1Container = document.getElementById('player1Container');
+        const player2Container = document.getElementById('player2Container');
+        const lobbyRoomTitle = document.getElementById('lobbyRoomTitle');
+        const roomMeta = document.getElementById('roomMeta');
+        const spectatorMeta = document.getElementById('spectatorMeta');
+        const graveModal = document.getElementById('graveModal');
+        const graveModalTitle = document.getElementById('graveModalTitle');
+        const graveModalCards = document.getElementById('graveModalCards');
+        const graveModalClose = document.getElementById('graveModalClose');
+        const graveSizeToggle = document.getElementById('graveSizeToggle');
+        const graveModalBackdrop = document.getElementById('graveModalBackdrop');
+        const slots = [
+            document.getElementById('slot0'),
+            document.getElementById('slot1'),
+            document.getElementById('slot2'),
+            document.getElementById('slot3'),
+        ];
+        const VIEWER_BASE_DUEL_WIDTH = 1360;
+        const VIEWER_BASE_DUEL_HEIGHT = 760;
+        const VIEWER_BASE_WAITING_WIDTH = 1120;
+        const VIEWER_BASE_WAITING_HEIGHT = 640;
+        const VIEWER_STAGE_PADDING = 6;
+        const BOARD_BASE_WIDTH = 860;
+        const BOARD_BASE_SCALE = 1.04;
+        const BOARD_PERSPECTIVE_INFLATION = 1.40;
+        const BOARD_CENTER_GUTTER = 96;
+
+        function fitViewerToViewport() {
+            if (!viewerRoot || !viewerStage) {
+                return;
+            }
+
+            const waitingMode = viewerRoot.classList.contains('waiting-mode');
+            const baseWidth = waitingMode ? VIEWER_BASE_WAITING_WIDTH : VIEWER_BASE_DUEL_WIDTH;
+            const baseHeight = waitingMode ? VIEWER_BASE_WAITING_HEIGHT : VIEWER_BASE_DUEL_HEIGHT;
+            const availableWidth = Math.max(320, window.innerWidth - (VIEWER_STAGE_PADDING * 2));
+            const availableHeight = Math.max(240, window.innerHeight - (VIEWER_STAGE_PADDING * 2));
+            const scaleX = availableWidth / baseWidth;
+            const scaleY = availableHeight / baseHeight;
+            const nextScale = Math.min(1.10, scaleX, scaleY);
+            const safeScale = Number.isFinite(nextScale) ? Math.max(0.3, nextScale) : 1;
+            viewerRoot.style.setProperty('--viewer-scale', String(safeScale));
+            applyBoardFitScale();
+        }
+
+        function applyBoardFitScale() {
+            if (!viewerRoot || !duelBoard || !centerPane) {
+                return;
+            }
+
+            const availableCenterWidth = Math.max(
+                560,
+                centerPane.clientWidth - BOARD_CENTER_GUTTER
+            );
+            const projectedBoardWidth = BOARD_BASE_WIDTH * BOARD_PERSPECTIVE_INFLATION;
+            const targetScale = (availableCenterWidth / projectedBoardWidth);
+            const nextBoardScale = Math.max(
+                0.6,
+                Math.min(BOARD_BASE_SCALE, Number.isFinite(targetScale) ? targetScale : BOARD_BASE_SCALE)
+            );
+            viewerRoot.style.setProperty('--board-fit-scale', String(nextBoardScale));
+        }
+
+        const state = {
+            phase: initialView === 'duel' ? 'dueling' : 'waiting',
+            clientFlow: 'edopro',
+            turnPlayer: null,
+            turnPlayerFromSnapshot: null,
+            turnPlayerFromMessage: null,
+            startingPlayer: null,
+            debugTurn: {
+                firstNewTurnPlayer: null,
+                lastNewTurnPlayer: null,
+                lastNewTurnCount: null,
+                lastTimeLimitPlayer: null,
+                lastTimeLimitValue: null,
+            },
+            players: [],
+            room: null,
+            spectators: 0,
+            typeChange: null,
+            rps: null,
+            turnCount: 0,
+            playerTimes: { 0: null, 1: null },
+            playerTimeUpdatedAt: { 0: null, 1: null },
+            playerLp: { 0: 8000, 1: 8000 },
+            pileCounts: {
+                deck: { 0: null, 1: null },
+            },
+            hands: { 0: [], 1: [] },
+            field: {},
+            graves: { 0: [], 1: [] },
+            highlightCell: null,
+            pendingReveal: null,
+            battlePhaseSeen: false,
+            perspectivePlayer: null,
+            perspectiveInitialized: false,
+        };
+        const seenSessionEvents = new Set();
+        const loggedAssetKeys = new Set();
+        const fieldImageCache = new Map();
+        let snapshotHydrated = false;
+        let highlightTimeout = null;
+        let lastValidCardId = null;
+        let lastImagePath = null;
+        let selectedCardId = null;
+        let selectedFieldKey = null;
+        let lastLoadedCardId = null;
+        let perspectiveSwitching = false;
+        let graveCardSizeMode = 'compact';
+
+        function applyGraveCardSizeMode() {
+            const isLarge = graveCardSizeMode === 'large';
+            graveModalCards.classList.toggle('grave-size-large', isLarge);
+            if (graveSizeToggle) {
+                graveSizeToggle.textContent = `Vista: ${isLarge ? 'Grande' : 'Compacta'}`;
+            }
+        }
+        let boardAngle = 0;
+        let viewerHeartbeatTimer = null;
+        const DEBUG_FIELD_IMAGE_LOGS = false;
+        const VERBOSE_EVENT_LOGS = false;
+        let turnLogLines = [];
+        const replayState = {
+            live: true,
+            queue: [],
+            timer: null,
+            lastEnqueueAt: 0,
+        };
+
+        function normalizePhaseCode(value) {
+            if (value === null || value === undefined) return '';
+            const raw = String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (raw === 'main1' || raw === 'm1' || raw === 'phase4') return 'm1';
+            if (raw === 'main2' || raw === 'm2' || raw === 'phase256') return 'm2';
+            if (
+                raw === 'battle' ||
+                raw === 'bp' ||
+                raw === 'phase8' ||
+                raw === 'phase16' ||
+                raw === 'phase32' ||
+                raw === 'phase64' ||
+                raw === 'phase128'
+            ) return 'bp';
+            if (raw === 'end' || raw === 'ep' || raw === 'phase512') return 'ep';
+            return raw;
+        }
+
+        function updatePhaseButtons() {
+            const current = normalizePhaseCode(state.phase);
+            const phaseM2Btn = document.getElementById('phaseM2Btn');
+            if (phaseM2Btn) {
+                const showM2 = state.battlePhaseSeen || current === 'm2';
+                phaseM2Btn.classList.toggle('phase-hidden-slot', !showM2);
+            }
+            document.querySelectorAll('#phaseBar .phase-btn[data-phase-code]').forEach((button) => {
+                button.classList.toggle('active', button.dataset.phaseCode === current);
+            });
+        }
+
+        function formatScoreValue(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric) || numeric < 0) {
+                return '-';
+            }
+            return String(Math.round(numeric));
+        }
+
+        function getDisplayedPlayerLp(player) {
+            const rawValue = state.playerLp?.[player];
+            const numeric = Number(rawValue);
+            if (!Number.isFinite(numeric) || numeric < 0) {
+                return rawValue;
+            }
+            return Math.max(0, Math.round(numeric));
+        }
+
+        function mapProtocolPlayer(player) {
+            const numeric = Number(player);
+            if (!Number.isFinite(numeric)) {
+                return player;
+            }
+
+            // Spectators join with a specific "type" (observer slot).
+            // Indices in messages are relative to this type. 
+            // Absolute = (Relative + Type) % 2
+            const obsType = Number(state.typeChange || 0) & 0x3;
+            if (obsType === 0) {
+                return numeric;
+            }
+            if (obsType === 1) {
+                return 1 - numeric;
+            }
+
+            return numeric;
+        }
+
+        function getFallbackLp(player) {
+            const roomStart = Number(state.room?.start_lp);
+            if (Number.isFinite(roomStart) && roomStart > 0) {
+                return roomStart;
+            }
+            const current = Number(state.playerLp?.[player]);
+            if (Number.isFinite(current) && current > 0) {
+                return current;
+            }
+            return 8000;
+        }
+
+        function formatTimeValue(rawValue) {
+            const numeric = Number(rawValue);
+            if (!Number.isFinite(numeric) || numeric < 0) {
+                return '--:--';
+            }
+            const total = Math.max(0, Math.round(numeric));
+            const minutes = Math.floor(total / 60);
+            const seconds = total % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function normalizeTurnTimeSeconds(rawValue) {
+            const numeric = Number(rawValue);
+            if (!Number.isFinite(numeric) || numeric < 0) {
+                return null;
+            }
+
+            // Most flows report seconds. Some variants may report milliseconds.
+            if (numeric > 7200 && numeric <= 720000) {
+                return Math.round(numeric / 1000);
+            }
+
+            return Math.round(numeric);
+        }
+
+        function getRoomTurnLimitSeconds() {
+            const value = state.room?.time_limit ?? state.room?.timeLimit ?? state.room?.time ?? state.room?.timelimit ?? null;
+            const normalized = normalizeTurnTimeSeconds(value);
+            return normalized === null ? null : normalized;
+        }
+
+        function getLiveRemainingTime(player) {
+            const baseSeconds = normalizeTurnTimeSeconds(state.playerTimes?.[player]);
+            if (baseSeconds === null) {
+                return null;
+            }
+
+            const updatedAt = Number(state.playerTimeUpdatedAt?.[player]);
+            if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+                return baseSeconds;
+            }
+
+            const elapsedSeconds = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+            return Math.max(0, baseSeconds - elapsedSeconds);
+        }
+
+        function resolveDisplayedTurnTime(player, isActive, roomTurnLimit) {
+            const baseSeconds = normalizeTurnTimeSeconds(state.playerTimes?.[player]);
+            const updatedAt = Number(state.playerTimeUpdatedAt?.[player]);
+            const hasRealtimeUpdate = Number.isFinite(updatedAt) && updatedAt > 0;
+
+            // Before first realtime update, prefer room configured turn limit.
+            if (!hasRealtimeUpdate) {
+                if (Number.isFinite(roomTurnLimit) && roomTurnLimit >= 0) {
+                    return roomTurnLimit;
+                }
+                return baseSeconds;
+            }
+
+            if (isActive) {
+                return getLiveRemainingTime(player);
+            }
+
+            // Non-active player stays frozen at last known value.
+            return baseSeconds;
+        }
+
+        function updateTopBar() {
+            const { topPlayerIndex, bottomPlayerIndex } = getRenderedPlayerOrder();
+            // Keep perspective untouched; only map the HUD slots correctly.
+            // The left HUD slot represents the viewer/main side, which in this layout
+            // corresponds to bottomPlayerIndex.
+            const leftPlayerIndex = bottomPlayerIndex;
+            const rightPlayerIndex = topPlayerIndex;
+            const leftPlayer = state.players.find((player) => Number(player.position) === leftPlayerIndex);
+            const rightPlayer = state.players.find((player) => Number(player.position) === rightPlayerIndex);
+            const leftPlayerName = leftPlayer?.name || 'Player A';
+            const rightPlayerName = rightPlayer?.name || 'Player B';
+            const currentTurn = Number.isFinite(Number(state.turnCount)) && Number(state.turnCount) > 0 ? Number(state.turnCount) : 1;
+
+            document.getElementById('playerm1').textContent = leftPlayerName;
+            document.getElementById('playerm2').textContent = rightPlayerName;
+            const leftLp = getDisplayedPlayerLp(leftPlayerIndex);
+            const rightLp = getDisplayedPlayerLp(rightPlayerIndex);
+            lpBarValueLeft.textContent = `${formatScoreValue(leftLp)}`;
+            lpBarValueRight.textContent = `${formatScoreValue(rightLp)}`;
+            const authoritativeTurnPlayer = getAuthoritativeTurnPlayer();
+            const hasActivePlayer =
+                authoritativeTurnPlayer !== null &&
+                authoritativeTurnPlayer !== undefined &&
+                Number.isFinite(Number(authoritativeTurnPlayer));
+            const activePlayer = hasActivePlayer ? Number(authoritativeTurnPlayer) : null;
+            const roomTurnLimit = getRoomTurnLimitSeconds();
+
+            const leftActive = hasActivePlayer && Number(activePlayer) === Number(leftPlayerIndex);
+            const rightActive = hasActivePlayer && Number(activePlayer) === Number(rightPlayerIndex);
+
+            const leftDisplay = resolveDisplayedTurnTime(leftPlayerIndex, leftActive, roomTurnLimit);
+            const rightDisplay = resolveDisplayedTurnTime(rightPlayerIndex, rightActive, roomTurnLimit);
+
+            const leftTime = formatTimeValue(leftDisplay);
+            const rightTime = formatTimeValue(rightDisplay);
+            document.getElementById('player1score').textContent = leftTime;
+            document.getElementById('player2score').textContent = rightTime;
+            document.querySelector('.score-1').textContent = `[ ${currentTurn} ]`;
+            document.getElementById('scoreText').textContent = 'TURNO';
+            document.getElementById('playerm1').classList.toggle('turn-active', leftActive);
+            document.getElementById('player1score').classList.toggle('turn-active', leftActive);
+            document.getElementById('playerm2').classList.toggle('turn-active', rightActive);
+            document.getElementById('player2score').classList.toggle('turn-active', rightActive);
+
+            const maxLp = Math.max(1, Number(state.room?.start_lp || 8000), Number(state.playerLp?.[0] || 0), Number(state.playerLp?.[1] || 0));
+            const leftPct = Math.max(0, Math.min(100, (Number(leftLp) / maxLp) * 100));
+            const rightPct = Math.max(0, Math.min(100, (Number(rightLp) / maxLp) * 100));
+            lpBarLeft.style.width = `${leftPct}%`;
+            lpBarRight.style.width = `${rightPct}%`;
+        }
+
+        function getAuthoritativeTurnPlayer() {
+            if (state.turnPlayerFromMessage !== null && state.turnPlayerFromMessage !== undefined) {
+                return Number(state.turnPlayerFromMessage);
+            }
+            return null;
+        }
+
+        function hydrateTurnInfoFromReplayEvents(replayEvents) {
+            const events = Array.isArray(replayEvents) ? replayEvents : [];
+            let firstNewTurnPlayer = null;
+            let lastNewTurnPlayer = null;
+            let newTurnCount = 0;
+
+            events.forEach((item) => {
+                const payload = item?.payload || {};
+                if (item?.type !== 'game_msg' || payload.type !== 'MSG_NEW_TURN') {
+                    return;
+                }
+                const mappedTurnPlayer = mapProtocolPlayer(payload.player);
+                if (firstNewTurnPlayer === null || firstNewTurnPlayer === undefined) {
+                    firstNewTurnPlayer = mappedTurnPlayer;
+                }
+                lastNewTurnPlayer = mappedTurnPlayer;
+                newTurnCount += 1;
+            });
+
+            if (firstNewTurnPlayer !== null && firstNewTurnPlayer !== undefined) {
+                state.debugTurn.firstNewTurnPlayer = firstNewTurnPlayer;
+                if (state.startingPlayer === null || state.startingPlayer === undefined) {
+                    state.startingPlayer = firstNewTurnPlayer;
+                }
+            }
+
+            if (lastNewTurnPlayer !== null && lastNewTurnPlayer !== undefined) {
+                state.debugTurn.lastNewTurnPlayer = lastNewTurnPlayer;
+                state.debugTurn.lastNewTurnCount = newTurnCount;
+                state.turnPlayerFromMessage = lastNewTurnPlayer;
+                state.turnPlayer = lastNewTurnPlayer;
+                if (!Number.isFinite(Number(state.turnCount)) || Number(state.turnCount) <= 0) {
+                    state.turnCount = newTurnCount;
+                }
+            }
+        }
+
+        function getHighlightedHudPlayerDebug() {
+            const { topPlayerIndex, bottomPlayerIndex } = getRenderedPlayerOrder();
+            const leftPlayerIndex = bottomPlayerIndex;
+            const rightPlayerIndex = topPlayerIndex;
+            const leftHighlighted =
+                document.getElementById('playerm1')?.classList.contains('turn-active') ||
+                document.getElementById('player1score')?.classList.contains('turn-active');
+            const rightHighlighted =
+                document.getElementById('playerm2')?.classList.contains('turn-active') ||
+                document.getElementById('player2score')?.classList.contains('turn-active');
+
+            if (leftHighlighted && !rightHighlighted) return leftPlayerIndex;
+            if (rightHighlighted && !leftHighlighted) return rightPlayerIndex;
+            if (leftHighlighted && rightHighlighted) return 'both';
+            return 'none';
+        }
+
+        function getHudSlotDebug() {
+            const { perspectivePlayer, topPlayerIndex, bottomPlayerIndex } = getRenderedPlayerOrder();
+            const leftPlayerIndex = bottomPlayerIndex;
+            const rightPlayerIndex = topPlayerIndex;
+            const leftHighlighted =
+                document.getElementById('playerm1')?.classList.contains('turn-active') ||
+                document.getElementById('player1score')?.classList.contains('turn-active');
+            const rightHighlighted =
+                document.getElementById('playerm2')?.classList.contains('turn-active') ||
+                document.getElementById('player2score')?.classList.contains('turn-active');
+            const leftPlayer = state.players.find((player) => Number(player.position) === Number(leftPlayerIndex));
+            const rightPlayer = state.players.find((player) => Number(player.position) === Number(rightPlayerIndex));
+            return {
+                perspectivePlayer,
+                topPlayerIndex,
+                bottomPlayerIndex,
+                leftPlayerIndex,
+                rightPlayerIndex,
+                leftPlayerName: leftPlayer?.name || `P${leftPlayerIndex}`,
+                rightPlayerName: rightPlayer?.name || `P${rightPlayerIndex}`,
+                leftHighlighted,
+                rightHighlighted,
+            };
+        }
+
+        function updateBoardOrientation() {
+            const perspectivePlayer = getPerspectivePlayer();
+            if (!state.perspectiveInitialized) {
+                boardAngle = perspectivePlayer === 0 ? 0 : -180;
+                duelBoard.style.setProperty('--board-angle', `${boardAngle}deg`);
+                duelBoard.style.setProperty('--field-card-angle', `${perspectivePlayer === 0 ? 0 : 180}deg`);
+                state.perspectiveInitialized = true;
+            } else if (!perspectiveSwitching) {
+                duelBoard.style.setProperty('--field-card-angle', `${perspectivePlayer === 0 ? 0 : 180}deg`);
+            }
+        }
+
+        function ensurePlayer(position) {
+            let player = state.players.find((item) => item.position === position);
+            if (!player) {
+                player = { position, name: '', status: 'NOT_READY' };
+                state.players.push(player);
+                state.players.sort((a, b) => a.position - b.position);
+            }
+            return player;
+        }
+
+        function appendLog(line) {
+            const timestamp = new Date().toLocaleTimeString();
+            turnLogLines.unshift(`[${timestamp}] ${line}`);
+            turnLogLines = turnLogLines.slice(0, MAX_LOG_LINES);
+            liveLog.textContent = `${turnLogLines.join('\n')}\n`;
+        }
+
+        function clearTurnLog(reason = '') {
+            turnLogLines = [];
+            liveLog.textContent = '';
+            if (reason) {
+                appendLog(reason);
+            }
+        }
+
+        function setCardDebug(line) {
+            cardDebug.textContent = `Last card event: ${line}`;
+        }
+
+        function setLastValidCardId(value, source = '') {
+            if (value === null || value === undefined) {
+                return;
+            }
+
+            const normalized = String(value >>> 0);
+            lastValidCardId = normalized;
+            lastCardIdBox.textContent = `Last valid card id: ${normalized}${source ? ` | source=${source}` : ''}`;
+            void loadCardDetails(normalized, source || 'auto');
+        }
+
+        function setLastImagePath(path, source = '') {
+            if (!path) {
+                return;
+            }
+
+            lastImagePath = path;
+            lastImagePathBox.textContent = `Last image path: ${path}${source ? ` | source=${source}` : ''}`;
+        }
+
+        function getCardImageUrl(cardId) {
+            const normalized = String(Number(cardId) >>> 0);
+            return `https://images.ygoprodeck.com/images/cards/${normalized}.jpg`;
+        }
+
+        function loadHiddenCardDetails(source = '') {
+            selectedCardId = null;
+            renderField();
+            cardPanelMeta.textContent = `ID: hidden${source ? ` | source=${source}` : ''}`;
+            cardPreview.src = './Carta/Carta1.png';
+            cardPreview.onerror = null;
+            cardPanelName.textContent = 'Hidden Card';
+            cardPanelDesc.textContent = 'This card is face-down or its code has not been revealed yet.';
+        }
+
+        async function loadCardDetails(cardId, source = '') {
+            if (!cardId) {
+                return;
+            }
+
+            const normalized = String(Number(cardId) >>> 0);
+            selectedCardId = normalized;
+            renderField();
+            cardPanelMeta.textContent = `ID: ${normalized}${source ? ` | source=${source}` : ''}`;
+            cardPreview.src = getCardImageUrl(normalized);
+            cardPreview.onerror = function () {
+                this.onerror = null;
+                this.src = './Carta/Carta1.png';
+            };
+
+            if (lastLoadedCardId === normalized) {
+                return;
+            }
+
+            lastLoadedCardId = normalized;
+
+            try {
+                const response = await fetch(`/api/card/${normalized}`, { cache: 'no-store' });
+                if (!response.ok) {
+                    cardPanelName.textContent = normalized;
+                    cardPanelDesc.textContent = 'Card information could not be loaded.';
+                    return;
+                }
+
+                const data = await response.json();
+                const card = data.card || {};
+                cardPanelName.textContent = card.name || normalized;
+                cardPanelMeta.textContent = `ID: ${normalized}${card.db ? ` | DB: ${card.db}` : ''}${source ? ` | source=${source}` : ''}`;
+                cardPanelDesc.textContent = card.desc || 'No description available.';
+            } catch (_) {
+                cardPanelName.textContent = normalized;
+                cardPanelDesc.textContent = 'Card information could not be loaded.';
+            }
+        }
+
+        function formatCardId(value) {
+            return value === null || value === undefined ? 'null' : String(value >>> 0);
+        }
+
+        function normalizeCardCode(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric) || numeric <= 0) {
+                return null;
+            }
+            return numeric >>> 0;
+        }
+
+        function formatUpdateDataCards(cards) {
+            if (!Array.isArray(cards) || cards.length === 0) {
+                return 'none';
+            }
+
+            return cards
+                .map((card) => {
+                    const decoded = decodeCardPosition(card.position);
+                    return `seq=${card.sequence},id=${formatCardId(card.code)},pos=${decoded.raw === null ? 'null' : decoded.raw}(${decoded.label})`;
+                })
+                .join(' | ');
+        }
+
+        function decodeCardPosition(position) {
+            const numeric = Number(position);
+            if (!Number.isFinite(numeric)) {
+                return {
+                    raw: null,
+                    isFaceDown: false,
+                    isDefense: false,
+                    isAttack: false,
+                    label: 'UNKNOWN',
+                };
+            }
+
+            const raw = numeric >>> 0;
+            const isFaceDown = (raw & 0x0a) !== 0;
+            const isDefense = (raw & 0x0c) !== 0;
+            const isAttack = (raw & 0x03) !== 0;
+
+            let label = 'UNKNOWN';
+            if (raw === 0x1) label = 'FACEUP_ATTACK';
+            else if (raw === 0x2) label = 'FACEDOWN_ATTACK';
+            else if (raw === 0x4) label = 'FACEUP_DEFENSE';
+            else if (raw === 0x8) label = 'FACEDOWN_DEFENSE';
+            else if (raw === 0x5) label = 'FACEUP';
+            else if (raw === 0x0a) label = 'FACEDOWN';
+            else if (raw === 0x3) label = 'ATTACK';
+            else if (raw === 0x0c) label = 'DEFENSE';
+
+            return {
+                raw,
+                isFaceDown,
+                isDefense,
+                isAttack,
+                label,
+            };
+        }
+
+        function setHighlightCell(cellId) {
+            state.highlightCell = cellId || null;
+            if (highlightTimeout) {
+                window.clearTimeout(highlightTimeout);
+                highlightTimeout = null;
+            }
+
+            renderField();
+
+            if (cellId) {
+                highlightTimeout = window.setTimeout(() => {
+                    state.highlightCell = null;
+                    renderField();
+                }, 1800);
+            }
+        }
+
+        function logAssetResultOnce(code, found) {
+            const key = `${code}:${found ? 'found' : 'missing'}`;
+            if (loggedAssetKeys.has(key)) {
+                return;
+            }
+            loggedAssetKeys.add(key);
+            const imagePath = getCardImageUrl(code);
+            setCardDebug(`asset ${found ? 'found' : 'missing'} | code=${code} | ${imagePath}`);
+            appendLog(`CARD ASSET ${found ? 'FOUND' : 'MISSING'} | code=${code} | path=${imagePath}`);
+        }
+
+        function sessionEventKey(item) {
+            return `${item.timestamp}|${item.type}|${JSON.stringify(item.payload)}`;
+        }
+
+        function formatSessionEvent(item) {
+            if (item.type === 'socket_send') {
+                return `[snapshot ${new Date(item.timestamp).toLocaleTimeString()}] SOCKET OUT ${item.payload.description} | hex=${item.payload.hex}`;
+            }
+
+            if (item.type === 'socket_frame') {
+                return `[snapshot ${new Date(item.timestamp).toLocaleTimeString()}] SOCKET IN frame #${item.payload.messageCount} | bytes=${item.payload.byteLength} | hex=${item.payload.hex}`;
+            }
+
+            if (item.type === 'socket_buffer_pending') {
+                return `[snapshot ${new Date(item.timestamp).toLocaleTimeString()}] SOCKET pending buffer | bytes=${item.payload.pendingBytes} | hex=${item.payload.pendingHex}`;
+            }
+
+            if (item.type === 'socket_segment') {
+                return `[snapshot ${new Date(item.timestamp).toLocaleTimeString()}] SOCKET ${item.payload.messageName} (0x${Number(item.payload.messageType).toString(16)}) | valid=${item.payload.isValid} | hex=${item.payload.segment}`;
+            }
+
+            if (item.type === 'socket_unhandled') {
+                return `[snapshot ${new Date(item.timestamp).toLocaleTimeString()}] UNHANDLED ${item.payload.messageName} (0x${Number(item.payload.messageType).toString(16)})`;
+            }
+
+            return `[snapshot ${new Date(item.timestamp).toLocaleTimeString()}] ${item.type} ${JSON.stringify(item.payload)}`;
+        }
+
+        function renderSnapshotLog(events) {
+            if (!Array.isArray(events) || events.length === 0) {
+                return;
+            }
+
+            const lines = events
+                .slice()
+                .reverse()
+                .filter((item) => {
+                    const key = sessionEventKey(item);
+                    if (seenSessionEvents.has(key)) {
+                        return false;
+                    }
+                    seenSessionEvents.add(key);
+                    return true;
+                })
+                .map(formatSessionEvent);
+
+            if (lines.length === 0) {
+                return;
+            }
+
+            turnLogLines = [...lines, ...turnLogLines].slice(0, MAX_LOG_LINES);
+            liveLog.textContent = `${turnLogLines.join('\n')}\n`;
+        }
+
+        function locationName(location) {
+            const numeric = normalizeLocation(location);
+            switch (numeric) {
+                case 0x01: return 'DECK';
+                case 0x02: return 'HAND';
+                case 0x04: return 'MZONE';
+                case 0x08: return 'SZONE';
+                case 0x10: return 'GRAVE';
+                case 0x20: return 'BANISHED';
+                case 0x40: return 'EXTRA';
+                case 0x80: return 'OVERLAY';
+                default: return `LOC_${numeric}`;
+            }
+        }
+
+        function normalizeLocation(location) {
+            const numeric = Number(location);
+            if (!Number.isFinite(numeric)) {
+                return location;
+            }
+            if (numeric === 0x01 || numeric === 0x02 || numeric === 0x04 || numeric === 0x08 || numeric === 0x10 || numeric === 0x20 || numeric === 0x40 || numeric === 0x80) {
+                return numeric;
+            }
+            if (numeric & 0x04) return 0x04;
+            if (numeric & 0x08) return 0x08;
+            if (numeric & 0x10) return 0x10;
+            if (numeric & 0x20) return 0x20;
+            if (numeric & 0x02) return 0x02;
+            if (numeric & 0x01) return 0x01;
+            if (numeric & 0x40) return 0x40;
+            if (numeric & 0x80) return 0x80;
+            return numeric;
+        }
+
+        function endpointLabel(controller, location, sequence, position) {
+            const player = controller === null || controller === undefined ? '?' : String(controller);
+            const seq = sequence === null || sequence === undefined ? '?' : String(sequence);
+            const pos = position === null || position === undefined ? '?' : String(position);
+            const normalizedLocation = normalizeLocation(location);
+            return `P${player}:${locationName(normalizedLocation)}:S${seq}:POS${pos}`;
+        }
+
+        function classifyMoveAction(previousLocation, currentLocation) {
+            const from = normalizeLocation(previousLocation);
+            const to = normalizeLocation(currentLocation);
+            if (from === 0x02 && (to === 0x04 || to === 0x08)) return 'HAND_TO_FIELD';
+            if ((from === 0x04 || from === 0x08) && to === 0x10) return 'FIELD_TO_GRAVE';
+            if ((from === 0x04 || from === 0x08) && to === 0x20) return 'FIELD_TO_BANISHED';
+            if (to === 0x10) return 'TO_GRAVE';
+            if (to === 0x20) return 'TO_BANISHED';
+            if (to === 0x02) return 'TO_HAND';
+            if (to === 0x01) return 'TO_DECK';
+            return 'MOVE';
+        }
+
+        function buildHiddenCardsFromCount(count) {
+            const numeric = Math.max(0, Number(count || 0));
+            return createHiddenCards(Math.min(120, numeric));
+        }
+
+        function isTagRoom(room) {
+            return Number(room?.team1 || 1) > 1 || Number(room?.team2 || 1) > 1;
+        }
+
+        function safe(value, fallback = '-') {
+            return value === null || value === undefined || value === '' ? fallback : value;
+        }
+
+        function createCardNode(code, hidden = false, title = null) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.dataset.code = String(code);
+            card.dataset.hidden = hidden ? 'true' : 'false';
+            card.title = title || (hidden ? 'Hidden card' : String(code));
+            card.style.backgroundImage = 'none';
+
+            const image = document.createElement('img');
+            image.alt = String(code);
+            image.draggable = false;
+            image.style.width = '100%';
+            image.style.height = '100%';
+            image.style.objectFit = 'cover';
+            image.style.borderRadius = '3px';
+            const imagePath = hidden ? './Carta/Carta1.png' : getCardImageUrl(code);
+            card.dataset.imagePath = imagePath;
+            if (!hidden) {
+                setLastImagePath(imagePath, `code=${code}`);
+            }
+            image.src = imagePath;
+            image.onerror = function () {
+                this.onerror = null;
+                this.src = './Carta/Carta1.png';
+                card.classList.add('fallback-card');
+                if (!hidden) {
+                    logAssetResultOnce(code, false);
+                }
+            };
+            if (!hidden) {
+                image.onload = function () {
+                    logAssetResultOnce(code, true);
+                };
+            }
+            card.appendChild(image);
+
+            if (!hidden) {
+                const label = document.createElement('div');
+                label.textContent = String(code);
+                label.style.position = 'absolute';
+                label.style.left = '2px';
+                label.style.right = '2px';
+                label.style.bottom = '2px';
+                label.style.fontSize = '9px';
+                label.style.lineHeight = '1.1';
+                label.style.padding = '2px';
+                label.style.background = 'rgba(0,0,0,0.62)';
+                label.style.color = '#fff';
+                label.style.borderRadius = '3px';
+                label.style.textAlign = 'center';
+                label.style.display = 'none';
+                card.appendChild(label);
+                image.addEventListener('error', () => {
+                    label.style.display = 'block';
+                });
+            }
+
+            return card;
+        }
+
+        function loadFieldImage(path) {
+            if (fieldImageCache.has(path)) {
+                return fieldImageCache.get(path);
+            }
+
+            const promise = new Promise((resolve, reject) => {
+                const image = new Image();
+                image.decoding = 'async';
+                image.onload = () => resolve(image);
+                image.onerror = reject;
+                image.src = path;
+            });
+
+            fieldImageCache.set(path, promise);
+            return promise;
+        }
+
+        function createFieldCardNode(code, hidden = false, title = null) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.dataset.code = String(code);
+            card.dataset.hidden = hidden ? 'true' : 'false';
+            card.title = title || (hidden ? 'Hidden card' : String(code));
+
+            const imagePath = hidden ? './Carta/Carta1.png' : getCardImageUrl(code);
+            card.dataset.imagePath = imagePath;
+            if (!hidden) {
+                setLastImagePath(imagePath, `code=${code}`);
+            }
+
+            if (hidden) {
+                const image = document.createElement('img');
+                image.alt = String(code);
+                image.draggable = false;
+                image.style.width = '100%';
+                image.style.height = '100%';
+                image.style.objectFit = 'cover';
+                image.style.borderRadius = '3px';
+                image.src = imagePath;
+                image.onerror = function () {
+                    this.onerror = null;
+                    this.src = './Carta/Carta1.png';
+                };
+                card.appendChild(image);
+                return card;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.display = 'block';
+            canvas.style.borderRadius = '3px';
+            canvas.style.pointerEvents = 'none';
+            card.appendChild(canvas);
+
+            const drawToCanvas = async () => {
+                try {
+                    const image = await loadFieldImage(imagePath);
+                    const rect = card.getBoundingClientRect();
+                    const cssWidth = Math.max(1, Math.round(rect.width || 62));
+                    const cssHeight = Math.max(1, Math.round(rect.height || 88));
+                    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+                    const targetWidth = Math.max(1, Math.round(cssWidth * dpr));
+                    const targetHeight = Math.max(1, Math.round(cssHeight * dpr));
+
+                    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+                        canvas.width = targetWidth;
+                        canvas.height = targetHeight;
+                    }
+
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+                    logAssetResultOnce(code, true);
+                } catch (_) {
+                    const fallback = document.createElement('img');
+                    fallback.alt = String(code);
+                    fallback.draggable = false;
+                    fallback.style.width = '100%';
+                    fallback.style.height = '100%';
+                    fallback.style.objectFit = 'cover';
+                    fallback.style.borderRadius = '3px';
+                    fallback.src = './Carta/Carta1.png';
+                    canvas.replaceWith(fallback);
+                    card.classList.add('fallback-card');
+                    logAssetResultOnce(code, false);
+                }
+            };
+
+            requestAnimationFrame(() => {
+                void drawToCanvas();
+            });
+
+            return card;
+        }
+
+        function getPerspectivePlayer() {
+            if (state.perspectivePlayer !== null && state.perspectivePlayer !== undefined) {
+                return Number(state.perspectivePlayer);
+            }
+            return 0;
+        }
+
+        function getRenderedPlayerOrder() {
+            const perspectivePlayer = getPerspectivePlayer();
+            const topPlayerIndex = perspectivePlayer === 0 ? 1 : 0;
+            const bottomPlayerIndex = perspectivePlayer;
+            return {
+                perspectivePlayer,
+                topPlayerIndex,
+                bottomPlayerIndex,
+            };
+        }
+
+        function getStateFieldKey(controller, location, sequence) {
+            const normalizedLocation = normalizeLocation(location);
+            return `${controller}:${normalizedLocation}:${sequence ?? 'x'}`;
+        }
+
+        function getVisibleFieldCellKey(controller, location, sequence) {
+            const normalizedLocation = normalizeLocation(location);
+            const perspectivePlayer = getPerspectivePlayer();
+            const isTopSide = Number(controller) !== perspectivePlayer;
+            const seq = Number(sequence);
+            const slot = isTopSide ? 5 - seq : seq + 1;
+
+            if (normalizedLocation === 0x08 && seq >= 0 && seq <= 4) {
+                return `${isTopSide ? 'a' : 'c'}${slot}`;
+            }
+
+            if (normalizedLocation === 0x04 && seq >= 0 && seq <= 4) {
+                return `${isTopSide ? 'b' : 'd'}${slot}`;
+            }
+
+            if (normalizedLocation === 0x10) {
+                return isTopSide ? 'graveTop' : 'graveBottom';
+            }
+
+            return null;
+        }
+
+        function getStateFieldKeyCandidates(controller, location, sequence) {
+            const candidates = [];
+            const raw = Number(location);
+            const push = (loc) => {
+                const key = getStateFieldKey(controller, loc, sequence);
+                if (key && !candidates.includes(key)) {
+                    candidates.push(key);
+                }
+            };
+
+            if (Number.isFinite(raw)) {
+                if (raw & 0x04) push(0x04);
+                if (raw & 0x08) push(0x08);
+                if (raw & 0x10) push(0x10);
+            }
+
+            push(location);
+            return candidates;
+        }
+
+        function removeFallbackFieldCardFromMove(payload, moveCode) {
+            const prevLocation = normalizeLocation(payload.previousLocation);
+            const preferredLocations = (prevLocation === 0x04 || prevLocation === 0x08) ? [prevLocation] : [0x04, 0x08];
+            const controllers = [payload.previousController, payload.currentController]
+                .map((value) => Number(value))
+                .filter((value, index, array) => Number.isFinite(value) && array.indexOf(value) === index);
+
+            const entries = Object.entries(state.field || {});
+            if (entries.length === 0) {
+                return null;
+            }
+
+            const candidates = entries
+                .map(([key, card]) => ({ key, card }))
+                .filter(({ card }) => !!card)
+                .filter(({ card }) => {
+                    const loc = normalizeLocation(card.location);
+                    return loc === 0x04 || loc === 0x08;
+                })
+                .filter(({ card }) => controllers.length === 0 || controllers.includes(Number(card.controller)));
+
+            if (candidates.length === 0) {
+                return null;
+            }
+
+            const byCodeAndLocation = candidates.find(({ card }) =>
+                moveCode !== null &&
+                normalizeCardCode(card.code) === moveCode &&
+                preferredLocations.includes(normalizeLocation(card.location))
+            );
+            if (byCodeAndLocation) {
+                delete state.field[byCodeAndLocation.key];
+                return byCodeAndLocation.key;
+            }
+
+            const byCode = candidates.find(({ card }) =>
+                moveCode !== null &&
+                normalizeCardCode(card.code) === moveCode
+            );
+            if (byCode) {
+                delete state.field[byCode.key];
+                return byCode.key;
+            }
+
+            const bySequenceAndLocation = candidates.find(({ card }) =>
+                Number(card.sequence) === Number(payload.previousSequence) &&
+                preferredLocations.includes(normalizeLocation(card.location))
+            );
+            if (bySequenceAndLocation) {
+                delete state.field[bySequenceAndLocation.key];
+                return bySequenceAndLocation.key;
+            }
+
+            return null;
+        }
+
+        function closeGraveModal() {
+            graveModal.classList.add('hidden');
+        }
+
+        function openGraveModal(player) {
+            const graveCards = Array.isArray(state.graves?.[player]) ? state.graves[player] : [];
+            const playerInfo = state.players.find((item) => Number(item.position) === Number(player));
+            graveModalTitle.textContent = `Cementerio ${playerInfo?.name || `Player ${player}`} (${graveCards.length})`;
+            graveModalCards.innerHTML = '';
+
+            if (!graveCards.length) {
+                graveModalCards.innerHTML = '<div class="help">No hay cartas en este cementerio.</div>';
+                graveModal.classList.remove('hidden');
+                return;
+            }
+
+            [...graveCards].reverse().forEach((graveCard, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'grave-card';
+                const image = document.createElement('img');
+                const code = graveCard?.code;
+                image.src = code ? getCardImageUrl(code) : './Carta/Carta1.png';
+                image.onerror = function () {
+                    this.onerror = null;
+                    this.src = './Carta/Carta1.png';
+                };
+
+                const title = document.createElement('div');
+                title.className = 'grave-card-title';
+                title.textContent = code ? `${index + 1}. ${code}` : `${index + 1}. Hidden card`;
+
+                wrapper.appendChild(image);
+                wrapper.appendChild(title);
+                wrapper.addEventListener('click', () => {
+                    if (code) {
+                        void loadCardDetails(code, `grave:${player}`);
+                    } else {
+                        loadHiddenCardDetails(`grave:${player}`);
+                    }
+                });
+
+                graveModalCards.appendChild(wrapper);
+            });
+
+            graveModal.classList.remove('hidden');
+            applyGraveCardSizeMode();
+        }
+
+        function getRenderedHandContainerForPlayer(player) {
+            const { topPlayerIndex, bottomPlayerIndex } = getRenderedPlayerOrder();
+            if (Number(player) === topPlayerIndex) {
+                return document.getElementById('player1Row1');
+            }
+            if (Number(player) === bottomPlayerIndex) {
+                return document.getElementById('player2Row1');
+            }
+            return null;
+        }
+
+        function animateHandShuffle(mappedPlayer) {
+            const container = getRenderedHandContainerForPlayer(player);
+            if (!container) {
+                return;
+            }
+            const cards = Array.from(container.querySelectorAll('.card'));
+            if (cards.length <= 1) {
+                return;
+            }
+
+            const firstRects = new Map(cards.map((card) => [card, card.getBoundingClientRect()]));
+            const reordered = [...cards].sort(() => Math.random() - 0.5);
+            reordered.forEach((card) => {
+                container.appendChild(card);
+            });
+
+            const lastRects = new Map(reordered.map((card) => [card, card.getBoundingClientRect()]));
+
+            reordered.forEach((card, index) => {
+                const first = firstRects.get(card);
+                const last = lastRects.get(card);
+                if (!first || !last) {
+                    return;
+                }
+
+                const deltaX = first.left - last.left;
+                const deltaY = first.top - last.top;
+                card.classList.add('shuffle-card');
+                const spreadX = (Math.random() * 90) - 45;
+                const spreadY = (Math.random() * 22) - 11;
+                const spreadRotate = (Math.random() * 30) - 15;
+                card.style.transform = `translate(${deltaX}px, ${deltaY}px) rotate(0deg)`;
+                card.style.filter = 'brightness(1.08)';
+                card.style.zIndex = String(20 + index);
+
+                requestAnimationFrame(() => {
+                    card.style.transform = `translate(${spreadX}px, ${spreadY}px) rotate(${spreadRotate}deg)`;
+                });
+
+                window.setTimeout(() => {
+                    card.style.transform = 'translate(0, 0) rotate(0deg)';
+                    card.style.filter = 'brightness(1)';
+                }, 260);
+            });
+
+            window.setTimeout(() => {
+                reordered.forEach((card) => {
+                    card.classList.remove('shuffle-card');
+                    card.style.transform = '';
+                    card.style.filter = '';
+                    card.style.zIndex = '';
+                });
+            }, 620);
+        }
+
+        function getHandSourceRect(controller) {
+            const container = getRenderedHandContainerForPlayer(controller);
+            if (!container) {
+                return null;
+            }
+
+            const cards = container.querySelectorAll('.card');
+            const sourceNode = cards[cards.length - 1] || container;
+            return sourceNode.getBoundingClientRect();
+        }
+
+        function animateHandToField(sourceRect, targetCellId, callback) {
+            const targetCell = document.getElementById(targetCellId);
+            if (!sourceRect || !targetCell) {
+                callback();
+                return;
+            }
+
+            const targetRect = targetCell.getBoundingClientRect();
+            if (!targetRect.width || !targetRect.height) {
+                callback();
+                return;
+            }
+
+            const flyer = createCardNode('hidden', true, 'Hidden card');
+            flyer.classList.add('flying-card');
+            flyer.style.left = `${sourceRect.left}px`;
+            flyer.style.top = `${sourceRect.top}px`;
+            flyer.style.width = `${sourceRect.width}px`;
+            flyer.style.height = `${sourceRect.height}px`;
+            document.body.appendChild(flyer);
+
+            requestAnimationFrame(() => {
+                flyer.style.left = `${targetRect.left}px`;
+                flyer.style.top = `${targetRect.top}px`;
+                flyer.style.width = `${targetRect.width}px`;
+                flyer.style.height = `${targetRect.height}px`;
+                flyer.style.transform = 'rotate(0.5turn) scale(0.96)';
+            });
+
+            const finalize = () => {
+                flyer.removeEventListener('transitionend', finalize);
+                flyer.remove();
+                callback();
+            };
+
+            flyer.addEventListener('transitionend', finalize, { once: true });
+            window.setTimeout(finalize, 360);
+        }
+
+        function renderHand(containerId, cards, hidden = false) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+
+            (cards || []).forEach((code, index) => {
+                const normalizedCode = normalizeCardCode(code);
+                const cardHidden = hidden || normalizedCode === null;
+                const displayCode = cardHidden ? `hidden-${index}` : normalizedCode;
+                const title = cardHidden ? `Hidden card (${cards.length})` : String(normalizedCode);
+                container.appendChild(createCardNode(displayCode, cardHidden, title));
+            });
+        }
+
+        function renderField() {
+            const cellIds = [
+                'a1', 'a2', 'a3', 'a4', 'a5',
+                'b1', 'b2', 'b3', 'b4', 'b5',
+                'c1', 'c2', 'c3', 'c4', 'c5',
+                'd1', 'd2', 'd3', 'd4', 'd5',
+            ];
+
+            cellIds.forEach((cellId) => {
+                const cell = document.getElementById(cellId);
+                if (!cell) return;
+                cell.onclick = null;
+                cell.style.cursor = 'default';
+                cell.style.pointerEvents = 'auto';
+                cell.innerHTML = '';
+
+                if (state.highlightCell === cellId) {
+                    cell.classList.add('debug-target');
+                } else {
+                    cell.classList.remove('debug-target');
+                }
+            });
+
+            Object.values(state.field || {}).forEach((fieldCard) => {
+                if (!fieldCard || fieldCard.controller === undefined || fieldCard.location === undefined || fieldCard.sequence === undefined) {
+                    return;
+                }
+
+                if (fieldCard.location === 0x10) {
+                    return;
+                }
+
+                const cellId = getVisibleFieldCellKey(fieldCard.controller, fieldCard.location, fieldCard.sequence);
+                const cell = document.getElementById(cellId);
+                if (!cell) {
+                    return;
+                }
+
+                if (fieldCard.code) {
+                    cell.style.cursor = 'pointer';
+                    cell.onclick = () => {
+                        selectedFieldKey = cellId;
+                        void loadCardDetails(fieldCard.code, `field:${cellId}`);
+                    };
+                } else {
+                    cell.style.cursor = 'pointer';
+                    cell.onclick = () => {
+                        selectedFieldKey = cellId;
+                        loadHiddenCardDetails(`field:${cellId}`);
+                    };
+                }
+
+                const positionInfo = decodeCardPosition(fieldCard.position);
+                const isFaceDown = positionInfo.isFaceDown;
+                const isMonsterZone = Number(fieldCard.location) === 0x04;
+                const isDefense = isMonsterZone && positionInfo.isDefense;
+                const isHidden = isFaceDown || !fieldCard.code;
+                const isTopSide = cellId.startsWith('a') || cellId.startsWith('b');
+                const signature = `${fieldCard.code || 'hidden'}|${fieldCard.position || 0}|${isHidden ? 1 : 0}|${isTopSide ? 'top' : 'bottom'}|${isDefense ? 'def' : 'atk'}`;
+                const node = createFieldCardNode(fieldCard.code || 'hidden', isHidden, `${fieldCard.code || 'hidden'} @ ${cellId}`);
+                node.dataset.signature = signature;
+                node.dataset.positionLabel = positionInfo.label;
+                node.style.width = 'auto';
+                node.style.maxWidth = 'none';
+                node.style.height = '96%';
+                node.style.position = 'absolute';
+                node.style.left = '50%';
+                node.style.top = '2%';
+                node.style.margin = '0';
+                node.style.zIndex = '15';
+                node.classList.add('field-card', isTopSide ? 'field-top' : 'field-bottom');
+                node.classList.toggle('field-defense', isDefense);
+                node.classList.toggle('selected-card', selectedFieldKey === cellId);
+                if (isFaceDown) {
+                    node.classList.add('field-facedown');
+                }
+                node.style.cursor = 'pointer';
+                node.addEventListener('click', () => {
+                    if (fieldCard.code) {
+                        selectedFieldKey = cellId;
+                        void loadCardDetails(fieldCard.code, `field:${cellId}`);
+                    } else {
+                        selectedFieldKey = cellId;
+                        loadHiddenCardDetails(`field:${cellId}`);
+                    }
+                });
+                if (DEBUG_FIELD_IMAGE_LOGS) {
+                    appendLog(`FIELD IMAGE PATH | cell=${cellId} | code=${fieldCard.code} | hidden=${isHidden} | path=${node.dataset.imagePath}`);
+                }
+                cell.appendChild(node);
+            });
+        }
+
+        function renderGraves() {
+            [
+                { cellId: 'graveTop', player: 0 },
+                { cellId: 'graveBottom', player: 1 },
+            ].forEach(({ cellId, player }) => {
+                const cell = document.getElementById(cellId);
+                if (!cell) return;
+                cell.innerHTML = '';
+                cell.style.cursor = 'pointer';
+                cell.onclick = () => openGraveModal(player);
+
+                const graveCards = Array.isArray(state.graves?.[player]) ? state.graves[player] : [];
+                if (!graveCards.length) {
+                    return;
+                }
+
+                const topCard = graveCards[graveCards.length - 1];
+                const isFaceDown = !topCard?.code;
+                const node = createFieldCardNode(topCard?.code || 'hidden', isFaceDown, `${topCard?.code || 'Hidden'} @ ${cellId}`);
+                node.classList.add('grave-slot-card');
+                if (isFaceDown) {
+                    node.classList.add('field-facedown');
+                }
+                node.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    openGraveModal(player);
+                });
+
+                const countLabel = document.createElement('div');
+                countLabel.textContent = String(graveCards.length);
+                countLabel.style.position = 'absolute';
+                countLabel.style.right = '-8px';
+                countLabel.style.bottom = '-10px';
+                countLabel.style.minWidth = '22px';
+                countLabel.style.height = '22px';
+                countLabel.style.padding = '0 6px';
+                countLabel.style.borderRadius = '12px';
+                countLabel.style.background = 'rgba(24, 16, 8, 0.92)';
+                countLabel.style.border = '1px solid rgba(255, 219, 102, 0.4)';
+                countLabel.style.color = '#ffd966';
+                countLabel.style.fontSize = '12px';
+                countLabel.style.fontWeight = '700';
+                countLabel.style.display = 'flex';
+                countLabel.style.alignItems = 'center';
+                countLabel.style.justifyContent = 'center';
+
+                cell.appendChild(node);
+                cell.appendChild(countLabel);
+            });
+        }
+
+        function renderDeckCounts() {
+            const { topPlayerIndex, bottomPlayerIndex } = getRenderedPlayerOrder();
+            const deckTop = document.getElementById('coverA');
+            const deckBottom = document.getElementById('coverB');
+
+            const applyDeckCount = (cell, count) => {
+                if (!cell) return;
+                const old = cell.querySelector('.deck-count-label');
+                if (old) old.remove();
+                const numeric = Number(count);
+                if (!Number.isFinite(numeric) || numeric < 0) return;
+
+                const label = document.createElement('div');
+                label.className = 'deck-count-label';
+                label.textContent = String(Math.round(numeric));
+                label.style.position = 'absolute';
+                label.style.left = '-8px';
+                label.style.bottom = '-10px';
+                label.style.minWidth = '22px';
+                label.style.height = '22px';
+                label.style.padding = '0 6px';
+                label.style.borderRadius = '12px';
+                label.style.background = 'rgba(10, 18, 36, 0.92)';
+                label.style.border = '1px solid rgba(142, 192, 255, 0.55)';
+                label.style.color = '#9ec5fe';
+                label.style.fontSize = '12px';
+                label.style.fontWeight = '700';
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.justifyContent = 'center';
+                cell.appendChild(label);
+            };
+
+            applyDeckCount(deckTop, state.pileCounts?.deck?.[topPlayerIndex]);
+            applyDeckCount(deckBottom, state.pileCounts?.deck?.[bottomPlayerIndex]);
+        }
+
+        function createHiddenCards(count) {
+            return Array.from({ length: Number(count) || 0 }, (_, index) => `hidden-${Date.now()}-${index}-${Math.random().toString(16).slice(2, 8)}`);
+        }
+
+        function removeLastCard(cards) {
+            if (!Array.isArray(cards) || cards.length === 0) {
+                return [];
+            }
+
+            return cards.slice(0, -1);
+        }
+
+        function renderLobby() {
+            if (window.ViewerLobbyMode?.renderLobby) {
+                window.ViewerLobbyMode.renderLobby({
+                    state,
+                    lobbyRoomTitle,
+                    spectatorMeta,
+                    roomMeta,
+                    slots,
+                    safe,
+                });
+                return;
+            }
+
+            // Fallback local render if module failed to load.
+            const room = state.room || {};
+            const players = [...(state.players || [])].sort((a, b) => a.position - b.position);
+            lobbyRoomTitle.textContent = `Room #${safe(room.roomid, '?')} ${room.roomname || ''}`.trim();
+            spectatorMeta.textContent = `Spectators: ${state.spectators}`;
+            const slotCount = isTagRoom(room) ? 4 : 2;
+            slots.forEach((slot, index) => {
+                slot.classList.toggle('hidden', index >= slotCount);
+                const player = players[index];
+                slot.textContent = player
+                    ? `${player.name || `Player ${player.position}`} ${player.status ? `(${player.status})` : ''}`.trim()
+                    : (index === 0 ? 'Host slot' : 'Waiting for player...');
+            });
+        }
+
+        function renderState() {
+            applyBoardFitScale();
+            state.turnPlayer = getAuthoritativeTurnPlayer();
+            updateTopBar();
+            const highlightedHudPlayer = getHighlightedHudPlayerDebug();
+            const hudSlotDebug = getHudSlotDebug();
+
+            liveMeta.innerHTML = `
+                Unique ID: ${uniqueId || '-'}<br>
+                Client: ${safe(state.room?.roomClient)}<br>
+                Flow: ${safe(state.clientFlow)}<br>
+                Phase: ${state.phase}<br>
+                Turn Player: ${getAuthoritativeTurnPlayer() ?? '-'}<br>
+                Turn Player From Message: ${state.turnPlayerFromMessage ?? '-'}<br>
+                Turn Player From Snapshot: ${state.turnPlayerFromSnapshot ?? '-'}<br>
+                Turn Player Highlighted: ${highlightedHudPlayer}<br>
+                Starter From First MSG_NEW_TURN: ${state.debugTurn?.firstNewTurnPlayer ?? '-'}<br>
+                Last MSG_NEW_TURN Player: ${state.debugTurn?.lastNewTurnPlayer ?? '-'}<br>
+                Last MSG_NEW_TURN Turn#: ${state.debugTurn?.lastNewTurnCount ?? '-'}<br>
+                Last MSG_NEW_TURN Raw Player: ${state.debugTurn?.lastRawPlayer ?? '-'}<br>
+                Last MSG_NEW_TURN Hex: ${state.debugTurn?.lastHex ?? '-'}<br>
+                Last TIME_LIMIT Player: ${state.debugTurn?.lastTimeLimitPlayer ?? '-'}<br>
+                Last TIME_LIMIT Value: ${state.debugTurn?.lastTimeLimitValue ?? '-'}<br>
+                Perspective Player: ${state.perspectivePlayer ?? '-'}<br>
+                Starting Player Stored: ${state.startingPlayer ?? '-'}<br>
+                Starting Player Raw: ${state.debugTurn?.startingPlayerRaw ?? '-'}<br>
+                Type Change: ${state.typeChange ?? '-'}<br>
+                HUD Left Slot: ${hudSlotDebug.leftPlayerName} (${hudSlotDebug.leftPlayerIndex}) | highlighted=${hudSlotDebug.leftHighlighted ? 'yes' : 'no'}<br>
+                HUD Right Slot: ${hudSlotDebug.rightPlayerName} (${hudSlotDebug.rightPlayerIndex}) | highlighted=${hudSlotDebug.rightHighlighted ? 'yes' : 'no'}<br>
+                Board Top Player: ${hudSlotDebug.topPlayerIndex}<br>
+                Board Bottom Player: ${hudSlotDebug.bottomPlayerIndex}<br>
+                Players: ${state.players.length > 0 ? state.players.map((player) => `${player.name} (${player.position})`).join(' | ') : '-'}
+                <br>Hand P0: ${(state.hands[0] || []).length} | Hand P1: ${(state.hands[1] || []).length}
+            `;
+
+            const duelStarted = state.phase === 'dueling' || String(state.phase).startsWith('phase:');
+            if (window.ViewerDuelMode?.applyModeVisibility) {
+                window.ViewerDuelMode.applyModeVisibility({
+                    viewerRoot,
+                    waitingLobby,
+                    cardPanel,
+                    duelWindow,
+                    duelBoard,
+                    lpContainer,
+                    buttonContainer,
+                    phaseBar,
+                    player1Container,
+                    player2Container,
+                    duelStarted,
+                    onModeChanged: () => fitViewerToViewport(),
+                });
+            } else {
+                const wasWaitingMode = viewerRoot.classList.contains('waiting-mode');
+                viewerRoot.classList.toggle('waiting-mode', !duelStarted);
+                const isWaitingMode = viewerRoot.classList.contains('waiting-mode');
+                if (wasWaitingMode !== isWaitingMode) {
+                    fitViewerToViewport();
+                }
+                waitingLobby.classList.toggle('hidden', duelStarted);
+                cardPanel.classList.toggle('hidden', !duelStarted);
+                duelWindow.classList.toggle('hidden', !duelStarted);
+                duelBoard.classList.toggle('hidden', !duelStarted);
+                lpContainer.classList.toggle('hidden', !duelStarted);
+                buttonContainer.classList.add('hidden');
+                phaseBar.classList.toggle('hidden', !duelStarted);
+                player1Container.classList.toggle('hidden', !duelStarted);
+                player2Container.classList.toggle('hidden', !duelStarted);
+            }
+            if (
+                duelStarted &&
+                (state.perspectivePlayer === null || state.perspectivePlayer === undefined)
+            ) {
+                state.perspectivePlayer = 0;
+                state.perspectiveInitialized = false;
+            }
+            if (!duelStarted) {
+                renderLobby();
+            }
+
+            if (window.ViewerBoardMode?.renderBoardScene) {
+                window.ViewerBoardMode.renderBoardScene({
+                    state,
+                    getPerspectivePlayer,
+                    getRenderedPlayerOrder,
+                    renderHand,
+                    renderField,
+                    renderGraves,
+                    renderDeckCounts,
+                    updatePhaseButtons,
+                    updateTopBar,
+                    updateBoardOrientation,
+                });
+            } else {
+                const { topPlayerIndex, bottomPlayerIndex } = getRenderedPlayerOrder();
+                renderHand('player1Row1', state.hands[topPlayerIndex] || [], true);
+                renderHand('player2Row1', state.hands[bottomPlayerIndex] || [], false);
+                renderField();
+                renderGraves();
+                renderDeckCounts();
+                updatePhaseButtons();
+                updateTopBar();
+                updateBoardOrientation();
+            }
+        }
+
+        function resetRoundState() {
+            state.hands = { 0: [], 1: [] };
+            state.field = {};
+            state.graves = { 0: [], 1: [] };
+            state.turnPlayer = null;
+            state.turnPlayerFromSnapshot = null;
+            state.turnPlayerFromMessage = null;
+            state.startingPlayer = null;
+            state.debugTurn = {
+                firstNewTurnPlayer: null,
+                lastNewTurnPlayer: null,
+                lastNewTurnCount: null,
+                lastTimeLimitPlayer: null,
+                lastTimeLimitValue: null,
+                lastRawPlayer: null,
+                lastHex: null,
+            };
+            state.turnCount = 0;
+            state.pendingReveal = null;
+            state.battlePhaseSeen = false;
+            state.highlightCell = null;
+                state.perspectivePlayer = null;
+                state.perspectiveInitialized = false;
+                selectedFieldKey = null;
+            }
+
+            function isReplayEligibleMessage(message) {
+            return message === 'duel_start' || message === 'duel_end' || message === 'game_msg' || message === 'time_limit';
+        }
+
+        function isWaitingRoomState(room) {
+            const roomClient = String(room?.roomClient || '').toLowerCase();
+            const istart = String(room?.istart || '').toLowerCase();
+            if (istart === 'waiting') {
+                return true;
+            }
+            if (istart) {
+                return false;
+            }
+            return roomClient === 'mercury';
+        }
+
+        function startReplayPump() {
+            if (replayState.timer) {
+                return;
+            }
+
+            replayState.timer = window.setInterval(() => {
+                if (replayState.queue.length === 0) {
+                    if (!replayState.live && Date.now() - replayState.lastEnqueueAt > 1200) {
+                        replayState.live = true;
+                        window.clearInterval(replayState.timer);
+                        replayState.timer = null;
+                        appendLog('Replay synced -> live mode');
+                    }
+                    return;
+                }
+
+                const batchSize = replayState.queue.length > 120 ? 24 : replayState.queue.length > 40 ? 12 : 6;
+                for (let index = 0; index < batchSize && replayState.queue.length > 0; index += 1) {
+                    const nextEvent = replayState.queue.shift();
+                    handleEventData(nextEvent);
+                }
+            }, 16);
+        }
+
+        function enqueueReplayEvent(data) {
+            replayState.queue.push(data);
+            replayState.lastEnqueueAt = Date.now();
+            startReplayPump();
+        }
+
+        async function loadSessionSnapshot() {
+            if (!uniqueId) {
+                return;
+            }
+
+            try {
+                const shouldConsumeReplay = !snapshotHydrated ? '&consumeReplay=1' : '&includeReplay=0';
+                const response = await fetch(`/api/session/${uniqueId}?t=${Date.now()}${shouldConsumeReplay}`, {
+                    cache: 'no-store',
+                });
+                if (!response.ok) {
+                    appendLog(`No session snapshot available yet (${response.status})`);
+                    return;
+                }
+
+                const data = await response.json();
+                const session = data.session;
+                const sessionPhase = String(session.phase || '').toLowerCase();
+                const isDuelSnapshot = sessionPhase === 'dueling' || sessionPhase.startsWith('phase:') || session.turnPlayer !== null || session.turnCount > 0;
+                if (!snapshotHydrated) {
+                    state.room = session.room || state.room;
+                    state.clientFlow = session.clientFlow || state.clientFlow || state.room?.roomClient || 'edopro';
+                    state.typeChange = session.typeChange ?? state.typeChange;
+                    if (session.phase) {
+                        state.phase = session.phase;
+                    }
+                    if (String(session.phase || '').toLowerCase() === 'waiting') {
+                        replayState.live = true;
+                    }
+                    state.startingPlayer = session.startingPlayer !== null && session.startingPlayer !== undefined
+                        ? mapProtocolPlayer(session.startingPlayer)
+                        : null;
+                    if (state.debugTurn) {
+                        state.debugTurn.startingPlayerRaw = session.startingPlayer;
+                    }
+                    state.turnPlayerFromSnapshot = session.turnPlayer !== null && session.turnPlayer !== undefined
+                        ? mapProtocolPlayer(session.turnPlayer)
+                        : state.turnPlayerFromSnapshot;
+                    state.turnPlayer = null;
+                    state.turnCount = session.turnCount ?? state.turnCount;
+                    state.playerTimes = session.playerTimes || state.playerTimes;
+                    state.playerTimeUpdatedAt = session.playerTimeUpdatedAt || state.playerTimeUpdatedAt;
+                    state.playerLp = session.playerLp || state.playerLp;
+                    state.pileCounts = session.pileCounts || state.pileCounts;
+                    state.players = Array.isArray(session.players) ? session.players : state.players;
+                    state.spectators = session.spectators ?? state.spectators;
+                    state.rps = session.rps ?? state.rps;
+                    state.hands = session.hands || state.hands;
+                    state.field = session.field || state.field;
+                    state.graves = session.graves || state.graves;
+                    hydrateTurnInfoFromReplayEvents(session.replayEvents);
+
+                    if (
+                        isDuelSnapshot &&
+                        Object.keys(state.field || {}).length === 0 &&
+                        Array.isArray(session.replayEvents) &&
+                        session.replayEvents.length > 0
+                    ) {
+                        replayState.live = true;
+                        // Rebuild duel state only from replay events to avoid duplicating
+                        // cards already present in partial snapshots (especially hands).
+                        state.hands = { 0: [], 1: [] };
+                        state.field = {};
+                        state.graves = { 0: [], 1: [] };
+                        state.startingPlayer = null;
+                        state.turnCount = 0;
+                        state.turnPlayer = null;
+                        state.turnPlayerFromSnapshot = null;
+                        state.turnPlayerFromMessage = null;
+                        state.perspectivePlayer = null;
+                        state.perspectiveInitialized = false;
+                        const replayEvents = [...session.replayEvents];
+                        replayEvents.forEach((item) => {
+                            const replayData = {
+                                uniqueId,
+                                message: item.type,
+                                payload: item.payload,
+                            };
+                            handleEventData(replayData);
+                        });
+                    }
+                    snapshotHydrated = true;
+                } else {
+                    state.room = state.room || session.room;
+                    state.clientFlow = session.clientFlow || state.clientFlow || state.room?.roomClient || 'edopro';
+                    state.typeChange = session.typeChange ?? state.typeChange;
+                    state.turnPlayerFromSnapshot = session.turnPlayer !== null && session.turnPlayer !== undefined
+                        ? mapProtocolPlayer(session.turnPlayer)
+                        : state.turnPlayerFromSnapshot;
+                    hydrateTurnInfoFromReplayEvents(session.replayEvents);
+                    state.turnPlayer = getAuthoritativeTurnPlayer();
+                    state.playerLp = session.playerLp || state.playerLp;
+                    state.pileCounts = session.pileCounts || state.pileCounts;
+                    state.spectators = session.spectators ?? state.spectators;
+                }
+                renderSnapshotLog(session.lastEvents);
+                renderState();
+            } catch (error) {
+                appendLog(`Snapshot load failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        events.addEventListener('open', function () {
+            appendLog('Connected to event stream');
+        });
+        events.addEventListener('message', function (event) {
+            const data = JSON.parse(event.data);
+            if (data.uniqueId && data.uniqueId !== uniqueId) {
+                return;
+            }
+
+            if (data.message === 'close' && data.uniqueId === uniqueId) {
+                window.close();
+            }
+
+            handleEventData(data);
+        });
+
+        function handleEventData(data) {
+
+            if (data.message === 'connection_open') {
+                state.room = data.payload.room || state.room;
+                state.clientFlow = data.payload.clientFlow || state.room?.roomClient || state.clientFlow || 'edopro';
+                const isWaitingRoom = isWaitingRoomState(state.room);
+                if (!isWaitingRoom) {
+                    state.phase = 'dueling';
+                    state.hands = { 0: [], 1: [] };
+                    state.field = {};
+                    state.graves = { 0: [], 1: [] };
+                    state.turnCount = 0;
+                    state.pendingReveal = null;
+                    state.perspectiveInitialized = false;
+                }
+                if (isWaitingRoom) {
+                    replayState.live = true;
+                }
+                if (Array.isArray(state.room?.users)) {
+                    const existingByPosition = new Map((state.players || []).map((player) => [Number(player.position), player]));
+                    state.players = state.room.users.map((user) => {
+                        const prev = existingByPosition.get(Number(user.pos));
+                        return {
+                            name: user.name,
+                            position: user.pos,
+                            status: prev?.status || 'NOT_READY',
+                        };
+                    });
+                }
+                appendLog(`Connection open for room ${data.payload.roomId}`);
+                renderState();
+            }
+
+            if (data.message === 'socket_send') {
+                appendLog(`SOCKET OUT ${data.payload.description} | hex=${data.payload.hex}`);
+            }
+
+            if (data.message === 'socket_frame') {
+                appendLog(`SOCKET IN frame #${data.payload.messageCount} | bytes=${data.payload.byteLength} | hex=${data.payload.hex}`);
+            }
+
+            if (data.message === 'socket_buffer_pending') {
+                appendLog(`SOCKET pending buffer | bytes=${data.payload.pendingBytes} | hex=${data.payload.pendingHex}`);
+            }
+
+            if (data.message === 'socket_segment') {
+                appendLog(`SOCKET ${data.payload.messageName} (0x${Number(data.payload.messageType).toString(16)}) | valid=${data.payload.isValid} | hex=${data.payload.segment}`);
+            }
+
+            if (data.message === 'socket_unhandled') {
+                appendLog(`UNHANDLED ${data.payload.messageName} (0x${Number(data.payload.messageType).toString(16)})`);
+            }
+
+            if (data.message === 'connection_end') {
+                appendLog(`Connection closed for room ${data.payload.roomId}`);
+            }
+
+            if (data.message === 'connection_error') {
+                appendLog(`Connection error: ${data.payload.error}`);
+            }
+
+            if (data.message === 'waiting_state') {
+                resetRoundState();
+                state.phase = 'waiting';
+                state.players = (data.payload.players || []).map((player) => ({
+                    ...player,
+                    status: 'NOT_READY',
+                }));
+                appendLog(`Waiting state players: ${state.players.map((player) => player.name).join(', ') || 'none'}`);
+                renderState();
+            }
+
+            if (data.message === 'waiting_type_change') {
+                state.typeChange = data.payload.type;
+                appendLog(`Type change translated: ${data.payload.type}`);
+                renderState();
+            }
+
+            if (data.message === 'waiting_player_enter') {
+                const player = ensurePlayer(data.payload.position);
+                player.name = data.payload.name;
+                appendLog(`Player enter translated: ${data.payload.name} at pos ${data.payload.position}`);
+                renderState();
+            }
+
+            if (data.message === 'waiting_player_change') {
+                if (!data.payload.isLobbyState) {
+                    appendLog(`Player change ignored | raw=${data.payload.rawStatus} | pos=${data.payload.position} | lowNibble=${data.payload.stateCode}`);
+                    return;
+                }
+
+                const player = ensurePlayer(data.payload.position);
+
+                if (data.payload.stateName === 'LEAVE' || data.payload.stateName === 'SPECTATE') {
+                    state.players = state.players.filter((item) => item.position !== data.payload.position);
+                    appendLog(`Player change translated: ${data.payload.stateName} at pos ${data.payload.position}`);
+                    renderState();
+                    return;
+                }
+
+                player.status = data.payload.stateName;
+                appendLog(`Player change translated: pos ${data.payload.position} -> ${data.payload.stateName} | raw=${data.payload.rawStatus}`);
+                renderState();
+            }
+
+            if (data.message === 'waiting_watch_change') {
+                state.spectators = data.payload.count ?? 0;
+                appendLog(`Watch change translated: spectators=${state.spectators}`);
+                renderState();
+            }
+
+            if (data.message === 'rps_result') {
+                state.rps = data.payload;
+                appendLog(`RPS result: ${data.payload.choice1Name} vs ${data.payload.choice2Name} -> ${data.payload.result}`);
+                renderState();
+            }
+
+            if (data.message === 'duel_start') {
+                state.phase = 'dueling';
+                state.turnPlayer = null;
+                state.turnPlayerFromSnapshot = null;
+                state.turnPlayerFromMessage = null;
+                state.startingPlayer = null;
+                state.perspectivePlayer = 0;
+                state.perspectiveInitialized = false;
+                state.turnCount = 0;
+                clearTurnLog('TURN TRACE RESET | Duel started');
+                appendLog('Duel started');
+                renderState();
+            }
+
+            if (data.message === 'duel_end') {
+                state.phase = 'ended';
+                appendLog('Duel ended');
+                renderState();
+            }
+
+            if (data.message === 'reload_field') {
+                const payload = data.payload || {};
+                state.phase = 'dueling';
+                if (payload.lp) {
+                    const lp0 = Number(payload.lp[0]);
+                    const lp1 = Number(payload.lp[1]);
+                    const hasPositiveLp = (Number.isFinite(lp0) && lp0 > 0) || (Number.isFinite(lp1) && lp1 > 0);
+                    state.playerLp = {
+                        0: hasPositiveLp && Number.isFinite(lp0) ? lp0 : state.playerLp[0],
+                        1: hasPositiveLp && Number.isFinite(lp1) ? lp1 : state.playerLp[1],
+                    };
+                }
+                if (payload.counts) {
+                    state.pileCounts = {
+                        deck: {
+                            0: Number.isFinite(Number(payload.counts?.deck?.[0])) ? Number(payload.counts.deck[0]) : state.pileCounts.deck[0],
+                            1: Number.isFinite(Number(payload.counts?.deck?.[1])) ? Number(payload.counts.deck[1]) : state.pileCounts.deck[1],
+                        },
+                    };
+                }
+                state.hands = {
+                    0: buildHiddenCardsFromCount(payload?.counts?.hand?.[0]),
+                    1: buildHiddenCardsFromCount(payload?.counts?.hand?.[1]),
+                };
+                state.field = {};
+                state.graves = { 0: [], 1: [] };
+                state.pendingReveal = null;
+
+                const zones = Array.isArray(payload.zones) ? payload.zones : [];
+                zones.forEach((zone) => {
+                    const key = getStateFieldKey(zone.controller, zone.location, zone.sequence);
+                    state.field[key] = {
+                        code: null,
+                        controller: zone.controller,
+                        location: zone.location,
+                        sequence: zone.sequence,
+                        position: zone.position,
+                    };
+                });
+
+                const grave0 = Math.max(0, Number(payload?.counts?.grave?.[0] || 0));
+                const grave1 = Math.max(0, Number(payload?.counts?.grave?.[1] || 0));
+                state.graves[0] = Array.from({ length: grave0 }, (_, index) => ({ code: null, position: null, sequence: index }));
+                state.graves[1] = Array.from({ length: grave1 }, (_, index) => ({ code: null, position: null, sequence: index }));
+
+                appendLog(
+                    `RELOAD_FIELD_TRANSLATED | mzone/szone=${zones.length} | hand P0=${state.hands[0].length} P1=${state.hands[1].length} | grave P0=${grave0} P1=${grave1}`
+                );
+                renderState();
+            }
+
+            if (data.message === 'game_msg') {
+                const payload = data.payload || {};
+                if (payload.clientFlow && state.clientFlow && payload.clientFlow !== state.clientFlow) {
+                    appendLog(`Ignored ${payload.type || 'game_msg'} from flow=${payload.clientFlow} (active=${state.clientFlow})`);
+                    return;
+                }
+                if (payload.type === 'MSG_RELOAD_FIELD') {
+                    appendLog('GAME_MSG_RELOAD_FIELD received');
+                }
+                let handledImmediateRender = false;
+
+                if (payload.type === 'MSG_NEW_TURN') {
+                    const nextTurn = (state.turnCount ?? 0) + 1;
+                    const mappedTurnPlayer = mapProtocolPlayer(payload.player);
+                    const hexMsg = payload.payloadHex || '-';
+                    appendLog(`MSG_NEW_TURN | hex=${hexMsg} | raw=${payload.player} | typeChange=${state.typeChange ?? 0} | mapped=${mappedTurnPlayer}`);
+                    clearTurnLog(`TURN TRACE RESET | turn=${nextTurn} | activePlayer=P${mappedTurnPlayer}`);
+                    state.battlePhaseSeen = false;
+                    if (state.debugTurn) {
+                        if (state.debugTurn.firstNewTurnPlayer === null || state.debugTurn.firstNewTurnPlayer === undefined) {
+                            state.debugTurn.firstNewTurnPlayer = mappedTurnPlayer;
+                        }
+                        state.debugTurn.lastNewTurnPlayer = mappedTurnPlayer;
+                        state.debugTurn.lastNewTurnCount = nextTurn;
+                        state.debugTurn.lastRawPlayer = payload.player;
+                        state.debugTurn.lastHex = payload.payloadHex;
+                    }
+                    if (state.startingPlayer === null || state.startingPlayer === undefined) {
+                        state.startingPlayer = mappedTurnPlayer;
+                        if (state.debugTurn) {
+                            state.debugTurn.startingPlayerRaw = payload.player;
+                        }
+                    }
+                    state.turnPlayerFromMessage = mappedTurnPlayer;
+                    state.turnPlayer = mappedTurnPlayer;
+                    state.turnCount = nextTurn;
+                    state.playerTimeUpdatedAt[mappedTurnPlayer] = state.playerTimeUpdatedAt[mappedTurnPlayer] || Date.now();
+                }
+
+                if (payload.type === 'MSG_NEW_PHASE') {
+                    state.phase = `phase:${payload.phase}`;
+                    if (normalizePhaseCode(state.phase) === 'bp') {
+                        state.battlePhaseSeen = true;
+                    }
+                }
+
+                if (payload.type === 'MSG_START') {
+                    const lp0 = Number(payload.lp0);
+                    const lp1 = Number(payload.lp1);
+                    if (Number.isFinite(lp0) && lp0 > 0) state.playerLp[0] = Math.round(lp0);
+                    if (Number.isFinite(lp1) && lp1 > 0) state.playerLp[1] = Math.round(lp1);
+                    if (payload.deck0 !== null && payload.deck0 !== undefined) state.pileCounts.deck[0] = Number(payload.deck0);
+                    if (payload.deck1 !== null && payload.deck1 !== undefined) state.pileCounts.deck[1] = Number(payload.deck1);
+                }
+
+                if (payload.type === 'MSG_DRAW' && payload.player !== null) {
+                    const mappedPlayer = mapProtocolPlayer(payload.player);
+                    const drawCardIds = (payload.cards || []).map((card) => normalizeCardCode(card?.code));
+                    drawCardIds.forEach((code) => setLastValidCardId(code, 'MSG_DRAW'));
+                    setCardDebug(`draw | player=${mappedPlayer} | count=${payload.count} | cardIds=${drawCardIds.map((code) => formatCardId(code)).join(',') || 'hidden/unknown'}`);
+                    const parsedCards = Array.isArray(payload.cards)
+                        ? payload.cards.map((card, index) => normalizeCardCode(card?.code) ?? `hidden-${Date.now()}-${index}-${Math.random().toString(16).slice(2, 8)}`)
+                        : [];
+                    const declaredCount = Math.max(0, Number(payload.count ?? 0));
+                    const missingCards = Math.max(0, declaredCount - parsedCards.length);
+                    const drawnCards = [
+                        ...parsedCards,
+                        ...createHiddenCards(missingCards),
+                    ];
+                    if (!Array.isArray(payload.cards) || parsedCards.length === 0) {
+                        drawnCards.push(...createHiddenCards(Math.max(0, declaredCount - drawnCards.length)));
+                    }
+                    state.hands[mappedPlayer] = [...(state.hands[mappedPlayer] || []), ...drawnCards];
+                    if (state.pileCounts.deck[mappedPlayer] !== null && state.pileCounts.deck[mappedPlayer] !== undefined) {
+                        state.pileCounts.deck[mappedPlayer] = Math.max(0, Number(state.pileCounts.deck[mappedPlayer]) - declaredCount);
+                    }
+                    appendLog(`DRAW_SYNC | declared=${declaredCount} parsed=${parsedCards.length} appended=${drawnCards.length}`);
+                    appendLog(`HAND COUNT | after DRAW | P0=${(state.hands[0] || []).length} | P1=${(state.hands[1] || []).length}`);
+                }
+
+                if (payload.type === 'MSG_DAMAGE' && payload.player !== null && payload.amount !== null && payload.amount !== undefined) {
+                    const mappedPlayer = mapProtocolPlayer(payload.player);
+                    const current = Number(state.playerLp[mappedPlayer]);
+                    const base = Number.isFinite(current) ? current : getFallbackLp(mappedPlayer);
+                    state.playerLp[mappedPlayer] = Math.max(0, base - Number(payload.amount));
+                }
+
+                if (payload.type === 'MSG_RECOVER' && payload.player !== null && payload.amount !== null && payload.amount !== undefined) {
+                    const mappedPlayer = mapProtocolPlayer(payload.player);
+                    const current = Number(state.playerLp[mappedPlayer]);
+                    const base = Number.isFinite(current) ? current : getFallbackLp(mappedPlayer);
+                    state.playerLp[mappedPlayer] = Math.max(0, base + Number(payload.amount));
+                }
+
+                if (payload.type === 'MSG_LPUPDATE' && payload.player !== null && payload.lp !== null && payload.lp !== undefined) {
+                    const mappedPlayer = mapProtocolPlayer(payload.player);
+                    const lp = Number(payload.lp);
+                    if (Number.isFinite(lp) && lp >= 0) {
+                        state.playerLp[mappedPlayer] = lp;
+                    }
+                }
+
+                if (payload.type === 'MSG_SHUFFLE_HAND' && payload.player !== null) {
+                    const mappedPlayer = mapProtocolPlayer(payload.player);
+                    const current = Array.isArray(state.hands[mappedPlayer]) ? [...state.hands[player]] : [];
+                    for (let index = current.length - 1; index > 0; index -= 1) {
+                        const randomIndex = Math.floor(Math.random() * (index + 1));
+                        [current[index], current[randomIndex]] = [current[randomIndex], current[index]];
+                    }
+                    state.hands[mappedPlayer] = current;
+                    setCardDebug(`shuffle_hand | player=${player} | cards=${current.length} | hex=${payload.payloadHex || '-'}`);
+                    appendLog(`HAND SHUFFLE DETECTED | player=${player} | cards=${current.length} | hex=${payload.payloadHex || '-'}`);
+                    renderState();
+                    animateHandShuffle(mappedPlayer);
+                    handledImmediateRender = true;
+                }
+
+                if (payload.type === 'MSG_MOVE') {
+                    const mappedPrevController = mapProtocolPlayer(payload.previousController);
+                    const mappedCurrController = mapProtocolPlayer(payload.currentController);
+                    const previousFieldKeys = getStateFieldKeyCandidates(mappedPrevController, payload.previousLocation, payload.previousSequence);
+                    const moveCode = normalizeCardCode(payload.code);
+                    const previousFieldKey = previousFieldKeys.find((key) => {
+                        const candidate = state.field[key];
+                        if (!candidate) return false;
+                        if (moveCode === null || moveCode === undefined) return true;
+                        return normalizeCardCode(candidate.code) === moveCode;
+                    }) || previousFieldKeys.find((key) => !!state.field[key]) || null;
+                    const previousFieldCard = previousFieldKey ? state.field[previousFieldKey] || null : null;
+                    const moveAction = classifyMoveAction(payload.previousLocation, payload.currentLocation);
+                    const previousPositionInfo = decodeCardPosition(payload.previousPosition);
+                    const currentPositionInfo = decodeCardPosition(payload.currentPosition);
+                    appendLog(
+                        `MOVE_TRANSLATED | parser=${payload.parserVariant || 'unknown'} | action=${moveAction} | code=${formatCardId(moveCode)} | from=${endpointLabel(payload.previousController, payload.previousLocation, payload.previousSequence, payload.previousPosition)}(${previousPositionInfo.label}) -> to=${endpointLabel(payload.currentController, payload.currentLocation, payload.currentSequence, payload.currentPosition)}(${currentPositionInfo.label})`
+                    );
+                    if (normalizeLocation(payload.previousLocation) === 0x02 && moveCode !== null) {
+                        state.pendingReveal = {
+                            code: moveCode,
+                            controller: mappedCurrController,
+                            location: payload.currentLocation,
+                            sequence: payload.currentSequence,
+                            position: payload.currentPosition,
+                        };
+                    }
+
+                    if (previousFieldKey) {
+                        delete state.field[previousFieldKey];
+                    } else if (normalizeLocation(payload.currentLocation) === 0x10) {
+                        const removedFallbackKey = removeFallbackFieldCardFromMove(payload, moveCode);
+                        if (removedFallbackKey) {
+                            appendLog(`FIELD_FALLBACK_REMOVE | key=${removedFallbackKey} | code=${formatCardId(moveCode)}`);
+                        }
+                    }
+
+                    const currentFieldKey = getVisibleFieldCellKey(mappedCurrController, payload.currentLocation, payload.currentSequence);
+                    const currentStateFieldKey = getStateFieldKey(mappedCurrController, payload.currentLocation, payload.currentSequence);
+                    const isHandToFieldMove =
+                        normalizeLocation(payload.previousLocation) === 0x02 &&
+                        payload.previousController !== null &&
+                        currentFieldKey &&
+                        payload.code !== null;
+
+                    const sourceRect = isHandToFieldMove ? getHandSourceRect(mappedPrevController) : null;
+
+                    if (normalizeLocation(payload.previousLocation) === 0x02 && payload.previousController !== null) {
+                        state.hands[mappedPrevController] =
+                            removeLastCard(state.hands[mappedPrevController] || []);
+                    }
+
+                    // Avoid duplicating hand cards on normal draws:
+                    // DECK -> HAND is already represented by MSG_DRAW in this flow.
+                    const shouldAppendHandOnMove =
+                        normalizeLocation(payload.currentLocation) === 0x02 &&
+                        payload.currentController !== null &&
+                        normalizeLocation(payload.previousLocation) !== 0x01;
+
+                    if (shouldAppendHandOnMove) {
+                        state.hands[mappedCurrController] = [
+                            ...(state.hands[mappedCurrController] || []),
+                            ...createHiddenCards(1),
+                        ];
+                    }
+
+                    if (normalizeLocation(payload.currentLocation) === 0x10 && payload.currentController !== null) {
+                        const resolvedCode = moveCode ?? previousFieldCard?.code ?? null;
+                        const playerKey = String(mappedCurrController);
+                        const existingGrave = Array.isArray(state.graves[playerKey]) ? [...state.graves[playerKey]] : [];
+                        const existingIndex = existingGrave.findIndex((item) => Number(item.sequence) === Number(payload.currentSequence));
+                        const existingCode = existingIndex >= 0 ? existingGrave[existingIndex]?.code ?? null : null;
+                        const graveEntry = {
+                            code: resolvedCode ?? existingCode,
+                            position: payload.currentPosition,
+                            sequence: payload.currentSequence,
+                        };
+                        if (existingIndex >= 0) {
+                            existingGrave[existingIndex] = { ...existingGrave[existingIndex], ...graveEntry };
+                        } else {
+                            existingGrave.push(graveEntry);
+                        }
+                        state.graves[playerKey] = existingGrave;
+                        appendLog(`GRAVE_APPLY | player=P${playerKey} | size=${existingGrave.length} | code=${formatCardId(graveEntry.code)}`);
+                    }
+
+                    const placeCardOnField = () => {
+                        if (normalizeLocation(payload.currentLocation) === 0x10) {
+                            renderState();
+                            return;
+                        }
+
+                        if (currentFieldKey) {
+                            if (moveCode !== null) {
+                                setCardDebug(`reveal | code=${moveCode} | cell=${currentFieldKey} | pos=${payload.currentPosition}`);
+                                appendLog(`FIELD REVEAL | code=${moveCode} | cell=${currentFieldKey} | position=${payload.currentPosition}(${currentPositionInfo.label})`);
+                            }
+                            state.field[currentStateFieldKey] = {
+                                ...(state.field[currentStateFieldKey] || {}),
+                                code: moveCode ?? state.field[currentStateFieldKey]?.code ?? null,
+                                controller: mappedCurrController,
+                                location: payload.currentLocation,
+                                sequence: payload.currentSequence,
+                                position: payload.currentPosition,
+                            };
+                        }
+                        renderState();
+                    };
+
+                    if (isHandToFieldMove) {
+                        setLastValidCardId(moveCode, 'MSG_MOVE');
+                        setHighlightCell(currentFieldKey);
+                        setCardDebug(`hand->field | cardId=${formatCardId(moveCode)} | from=P${payload.previousController} -> ${currentFieldKey} | hex=${payload.payloadHex || '-'}`);
+                        appendLog(`HAND TO FIELD | cardId=${formatCardId(moveCode)} | from=P${payload.previousController} hand -> ${currentFieldKey}`);
+                        appendLog(`HAND COUNT | after MOVE remove | P0=${(state.hands[0] || []).length} | P1=${(state.hands[1] || []).length}`);
+                        renderState();
+                        window.setTimeout(() => {
+                            animateHandToField(sourceRect, currentFieldKey, placeCardOnField);
+                        }, 30);
+                    } else {
+                        if (moveCode !== null) {
+                            setLastValidCardId(moveCode, 'MSG_MOVE');
+                            setCardDebug(`move | cardId=${formatCardId(moveCode)} | from=${payload.previousLocation}/${payload.previousSequence} -> ${payload.currentLocation}/${payload.currentSequence} | hex=${payload.payloadHex || '-'}`);
+                        }
+                        if (currentFieldKey) {
+                            setHighlightCell(currentFieldKey);
+                        }
+                        appendLog(`HAND COUNT | after MOVE | P0=${(state.hands[0] || []).length} | P1=${(state.hands[1] || []).length}`);
+                        placeCardOnField();
+                    }
+                }
+
+                if (payload.type === 'MSG_UPDATE_CARD') {
+                    const mappedPlayer = mapProtocolPlayer(payload.player);
+                    const resolvedCode = normalizeCardCode(payload.code) ?? state.pendingReveal?.code ?? null;
+                    const updatePositionInfo = decodeCardPosition(payload.position);
+                    const normalizedUpdateLocation = normalizeLocation(payload.location);
+                    setLastValidCardId(resolvedCode, 'MSG_UPDATE_CARD_RESOLVED');
+                    const currentFieldKey = getVisibleFieldCellKey(mappedPlayer, normalizedUpdateLocation, payload.sequence);
+                    const currentStateFieldKey = getStateFieldKey(mappedPlayer, normalizedUpdateLocation, payload.sequence);
+                    if (currentFieldKey) {
+                        setHighlightCell(currentFieldKey);
+                    }
+                    setCardDebug(`update_card | cardId=${formatCardId(resolvedCode)} | cell=${currentFieldKey || '-'} | pos=${payload.position} | flags=${payload.flags} | queryHex=${payload.queryHex || '-'} | hex=${payload.payloadHex || '-'}`);
+                    appendLog(
+                        `UPDATE_CARD_TRANSLATED | code=${formatCardId(resolvedCode)} | target=${endpointLabel(payload.player, normalizedUpdateLocation, payload.sequence, payload.position)}(${updatePositionInfo.label}) | flags=${payload.flags ?? '-'} | fieldCell=${currentFieldKey || '-'}`
+                    );
+
+                    if (currentStateFieldKey) {
+                        const existingFieldCard = state.field[currentStateFieldKey] || null;
+                        const finalCode = resolvedCode ?? existingFieldCard?.code ?? null;
+                        const finalPosition = payload.position ?? existingFieldCard?.position ?? null;
+                        if (normalizedUpdateLocation === 0x10) {
+                            const playerKey = String(mappedPlayer);
+                            const grave = Array.isArray(state.graves[playerKey]) ? [...state.graves[playerKey]] : [];
+                            const existingIndex = grave.findIndex((item) => Number(item.sequence) === Number(payload.sequence));
+                            const graveEntry = {
+                                code: finalCode ?? (existingIndex >= 0 ? grave[existingIndex]?.code ?? null : null),
+                                position: payload.position,
+                                sequence: payload.sequence,
+                            };
+                            if (existingIndex >= 0) {
+                                grave[existingIndex] = { ...grave[existingIndex], ...graveEntry };
+                            } else {
+                                grave.push(graveEntry);
+                            }
+                            state.graves[playerKey] = grave;
+                        } else if (finalCode !== null && finalCode !== undefined) {
+                            state.field[currentStateFieldKey] = {
+                                ...(existingFieldCard || {}),
+                                code: finalCode,
+                                controller: mappedPlayer,
+                                location: normalizedUpdateLocation,
+                                sequence: payload.sequence,
+                                position: finalPosition,
+                            };
+                        } else if (finalPosition !== null && finalPosition !== undefined) {
+                            state.field[currentStateFieldKey] = {
+                                ...(existingFieldCard || {}),
+                                code: existingFieldCard?.code ?? null,
+                                controller: mappedPlayer,
+                                location: normalizedUpdateLocation,
+                                sequence: payload.sequence,
+                                position: finalPosition,
+                            };
+                        } else if (payload.position === null || payload.position === undefined) {
+                            delete state.field[currentStateFieldKey];
+                        }
+                    }
+
+                    if (resolvedCode !== null && resolvedCode !== undefined) {
+                        state.pendingReveal = null;
+                    }
+                }
+
+                if (payload.type === 'MSG_UPDATE_DATA') {
+                    const mappedPlayer = mapProtocolPlayer(payload.player);
+                    const resolvedCards = (payload.cards || []).map((card) => ({
+                        ...card,
+                        code: normalizeCardCode(card.code) ?? state.pendingReveal?.code ?? null,
+                    }));
+                    const normalizedPayloadLocation = normalizeLocation(payload.location);
+                    (resolvedCards || []).forEach((card) => setLastValidCardId(card.code, 'MSG_UPDATE_DATA_RESOLVED'));
+                    setCardDebug(`update_data | player=${payload.player} | location=${payload.location} | cards=${Array.isArray(payload.cards) ? payload.cards.length : 0} | cardIds=[${formatUpdateDataCards(resolvedCards)}] | hex=${payload.payloadHex || '-'}`);
+                    appendLog(
+                        `UPDATE_DATA_TRANSLATED | zone=${locationName(normalizedPayloadLocation)} | player=P${payload.player} | cards=${Array.isArray(resolvedCards) ? resolvedCards.length : 0} | details=[${formatUpdateDataCards(resolvedCards)}]`
+                    );
+
+                    if (Array.isArray(resolvedCards)) {
+                        if (normalizedPayloadLocation === 0x04 || normalizedPayloadLocation === 0x08) {
+                            const activeSequences = new Set(
+                                resolvedCards
+                                    .map((card) => Number(card.sequence))
+                                    .filter((sequence) => Number.isFinite(sequence))
+                            );
+
+                            Object.keys(state.field).forEach((fieldKey) => {
+                                const fieldCard = state.field[fieldKey];
+                                if (!fieldCard) {
+                                    return;
+                                }
+
+                                if (
+                                    Number(fieldCard.controller) === Number(mappedPlayer) &&
+                                    Number(normalizeLocation(fieldCard.location)) === Number(normalizedPayloadLocation) &&
+                                    Number.isFinite(Number(fieldCard.sequence)) &&
+                                    !activeSequences.has(Number(fieldCard.sequence))
+                                ) {
+                                    delete state.field[fieldKey];
+                                }
+                            });
+                        }
+
+                        resolvedCards.forEach((card) => {
+                            const currentFieldKey = getVisibleFieldCellKey(mappedPlayer, normalizedPayloadLocation, card.sequence);
+                            const currentStateFieldKey = getStateFieldKey(mappedPlayer, normalizedPayloadLocation, card.sequence);
+                            if (!currentFieldKey) {
+                                return;
+                            }
+
+                            if (normalizedPayloadLocation === 0x10) {
+                                const playerKey = String(mappedPlayer);
+                                const grave = Array.isArray(state.graves[playerKey]) ? [...state.graves[playerKey]] : [];
+                                const existingIndex = grave.findIndex((item) => Number(item.sequence) === Number(card.sequence));
+                                const graveEntry = {
+                                    code: card.code ?? (existingIndex >= 0 ? grave[existingIndex]?.code ?? null : null),
+                                    position: card.position,
+                                    sequence: card.sequence,
+                                };
+                                if (existingIndex >= 0) {
+                                    grave[existingIndex] = { ...grave[existingIndex], ...graveEntry };
+                                } else {
+                                    grave.push(graveEntry);
+                                }
+                                state.graves[playerKey] = grave;
+                                return;
+                            }
+
+                            const existingFieldCard = state.field[currentStateFieldKey] || null;
+                            const finalCode = card.code ?? existingFieldCard?.code ?? null;
+                            const finalPosition = card.position ?? existingFieldCard?.position ?? null;
+
+                            if (card.code !== null && card.code !== undefined) {
+                                setHighlightCell(currentFieldKey);
+                            }
+
+                            if (finalCode !== null && finalCode !== undefined) {
+                                state.field[currentStateFieldKey] = {
+                                    ...(existingFieldCard || {}),
+                                    code: finalCode,
+                                    controller: mappedPlayer,
+                                    location: normalizedPayloadLocation,
+                                    sequence: card.sequence,
+                                    position: finalPosition,
+                                };
+                            } else if (finalPosition !== null && finalPosition !== undefined) {
+                                state.field[currentStateFieldKey] = {
+                                    ...(existingFieldCard || {}),
+                                    code: existingFieldCard?.code ?? null,
+                                    controller: mappedPlayer,
+                                    location: normalizedPayloadLocation,
+                                    sequence: card.sequence,
+                                    position: finalPosition,
+                                };
+                            }
+                        });
+                    }
+
+                    if (resolvedCards.some((card) => card.code !== null && card.code !== undefined)) {
+                        state.pendingReveal = null;
+                    }
+                }
+
+                if (payload.type === 'UNHANDLED' && payload.rawType === 6) {
+                    setCardDebug(`update_data | hex=${payload.payloadHex || '-'}`);
+                }
+
+                if (payload.type === 'UNHANDLED') {
+                    const hexPreview = String(payload.payloadHex || '').slice(0, 96);
+                    appendLog(`UNHANDLED_TRANSLATION | rawType=${payload.rawType} | hex=${hexPreview}${String(payload.payloadHex || '').length > 96 ? '...' : ''}`);
+                }
+
+                if (VERBOSE_EVENT_LOGS || (payload.type !== 'MSG_UPDATE_DATA' && payload.type !== 'MSG_UPDATE_CARD')) {
+                    appendLog(`${payload.type} | raw=${payload.rawType}${payload.player !== null && payload.player !== undefined ? ` | player=${payload.player}` : ''}${payload.amount !== null && payload.amount !== undefined ? ` | amount=${payload.amount}` : ''}${payload.count !== null && payload.count !== undefined ? ` | count=${payload.count}` : ''}`);
+                }
+                if (payload.type !== 'MSG_MOVE' && !handledImmediateRender) {
+                    renderState();
+                }
+            }
+
+            if (data.message === 'time_limit') {
+                const player = Number(data.payload?.player);
+                if (Number.isFinite(player) && player >= 0) {
+                    const mappedPlayer = mapProtocolPlayer(player);
+                    if (state.debugTurn) {
+                        state.debugTurn.lastTimeLimitPlayer = mappedPlayer;
+                        state.debugTurn.lastTimeLimitValue = data.payload?.timeLeft ?? '-';
+                    }
+                    state.playerTimes[mappedPlayer] = data.payload?.timeLeft ?? state.playerTimes[mappedPlayer];
+                    state.playerTimeUpdatedAt[mappedPlayer] = Date.now();
+                    appendLog(
+                        `TIME_LIMIT_RAW | player=P${mappedPlayer} | timeLeft=${data.payload?.timeLeft ?? '-'} | le@4=${data.payload?.time16le ?? '-'} | be@4=${data.payload?.time16be ?? '-'} | le@5=${data.payload?.time16leOff5 ?? '-'} | be@5=${data.payload?.time16beOff5 ?? '-'} | hex=${data.payload?.payloadHex || '-'}`
+                    );
+                    updateTopBar();
+                }
+            }
+        }
+
+        events.addEventListener('error', function () {
+            appendLog('Event stream disconnected');
+        });
+
+        function resetViewerScrollPositions() {
+            try {
+                if (history && 'scrollRestoration' in history) {
+                    history.scrollRestoration = 'manual';
+                }
+            } catch (_) {
+                // ignore
+            }
+
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+
+            if (viewerRoot) viewerRoot.scrollTop = 0;
+            if (centerPane) centerPane.scrollTop = 0;
+            if (livePanel) livePanel.scrollTop = 0;
+            if (cardPanel) cardPanel.scrollTop = 0;
+            if (liveLog) liveLog.scrollTop = 0;
+        }
+
+        renderState();
+        resetViewerScrollPositions();
+        fitViewerToViewport();
+        void loadSessionSnapshot();
+        window.addEventListener('pageshow', resetViewerScrollPositions);
+        window.addEventListener('resize', fitViewerToViewport);
+        window.addEventListener('orientationchange', fitViewerToViewport);
+        window.setInterval(() => {
+            if (!snapshotHydrated || state.phase === 'waiting') {
+                void loadSessionSnapshot();
+            }
+        }, 1000);
+
+        document.querySelectorAll('#phaseBar .phase-btn[data-phase-code]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const phaseCode = button.dataset.phaseCode;
+                const phaseLabels = {
+                    m1: 'phase:main1',
+                    bp: 'phase:battle',
+                    m2: 'phase:main2',
+                    ep: 'phase:end',
+                };
+                state.phase = phaseLabels[phaseCode] || state.phase;
+                if (phaseCode === 'bp') {
+                    state.battlePhaseSeen = true;
+                }
+                if (phaseCode === 'm1') {
+                    state.battlePhaseSeen = false;
+                }
+                appendLog(`PHASE BAR | manual phase -> ${state.phase}`);
+                renderState();
+            });
+        });
+
+        document.getElementById('switchPhaseBtn').addEventListener('click', () => {
+            if (perspectiveSwitching) {
+                return;
+            }
+            perspectiveSwitching = true;
+            const current = getPerspectivePlayer();
+            const next = current === 0 ? 1 : 0;
+            boardAngle += current === 0 ? -180 : 180;
+            duelBoard.style.setProperty('--board-angle', `${boardAngle}deg`);
+            window.setTimeout(() => {
+                state.perspectivePlayer = next;
+                duelBoard.style.setProperty('--field-card-angle', `${next === 0 ? 0 : 180}deg`);
+                perspectiveSwitching = false;
+                appendLog(`PERSPECTIVE SWITCH | now viewing from player ${state.perspectivePlayer}`);
+                renderState();
+            }, 680);
+        });
+
+        window.setInterval(() => {
+            if (state.phase === 'dueling' || String(state.phase).startsWith('phase:')) {
+                updateTopBar();
+            }
+        }, 1000);
+
+        function closeViewerSession() {
+            if (!uniqueId) {
+                return;
+            }
+
+            const url = `/api/session/${uniqueId}/close`;
+            try {
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(url, new Blob(['{}'], { type: 'application/json' }));
+                    return;
+                }
+            } catch (_) {
+                // ignore and fallback
+            }
+
+            try {
+                fetch(url, {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}',
+                }).catch(() => {});
+            } catch (_) {
+                // ignore
+            }
+        }
+
+        function pingViewerSession() {
+            if (!uniqueId) {
+                return;
+            }
+
+            try {
+                fetch(`/api/session/${uniqueId}/ping`, {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}',
+                }).catch(() => {});
+            } catch (_) {
+                // ignore
+            }
+        }
+
+        window.addEventListener('pagehide', () => {
+            if (viewerHeartbeatTimer) {
+                window.clearInterval(viewerHeartbeatTimer);
+                viewerHeartbeatTimer = null;
+            }
+            closeViewerSession();
+        });
+        window.addEventListener('beforeunload', () => {
+            if (viewerHeartbeatTimer) {
+                window.clearInterval(viewerHeartbeatTimer);
+                viewerHeartbeatTimer = null;
+            }
+            closeViewerSession();
+        });
+        viewerHeartbeatTimer = window.setInterval(pingViewerSession, 5000);
+        pingViewerSession();
+
+        graveModalClose.addEventListener('click', closeGraveModal);
+        graveModalBackdrop.addEventListener('click', closeGraveModal);
+        graveSizeToggle.addEventListener('click', () => {
+            graveCardSizeMode = graveCardSizeMode === 'compact' ? 'large' : 'compact';
+            applyGraveCardSizeMode();
+        });
+        applyGraveCardSizeMode();
+    </script>
+</body>
+
+</html>

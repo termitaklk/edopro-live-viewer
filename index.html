@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Duel Room</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #181c23;
+      --panel-2: #202632;
+      --text: #eef2f7;
+      --muted: #9ca7b8;
+      --accent: #62d4a8;
+      --accent-2: #3aa0ff;
+      --danger: #ff7b7b;
+      --border: #303846;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(58, 160, 255, 0.15), transparent 30%),
+        radial-gradient(circle at right, rgba(98, 212, 168, 0.12), transparent 25%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+    }
+
+    .sub {
+      margin: 0 0 24px;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+    }
+
+    .panel h2 {
+      margin: 0 0 16px;
+      font-size: 18px;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    input, select, textarea, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .check input {
+      width: auto;
+    }
+
+    button {
+      margin-top: 18px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color: #081018;
+      font-weight: 700;
+      cursor: pointer;
+      border: 0;
+    }
+
+    button:hover {
+      filter: brightness(1.06);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .button-row button {
+      margin-top: 0;
+    }
+
+    .tracked-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .tracked-item {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+    }
+
+    .tracked-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(98, 212, 168, 0.25);
+    }
+
+    .tracked-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .tracked-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0c0f14;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      min-height: 280px;
+    }
+
+    .help {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Room API Tester</h1>
+    <p class="sub">Simple tester for <code>POST /api/room</code> with EDOPro and Mercury payloads.</p>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Request</h2>
+
+        <div class="row">
+          <div>
+            <label for="serverIp">Server IP</label>
+            <input id="serverIp" value="10.50.0.23" />
+          </div>
+          <div>
+            <label for="httpPort">HTTP API Port</label>
+            <input id="httpPort" value="7922" />
+          </div>
+        </div>
+
+        <label for="baseUrl">Active API URL</label>
+        <input id="baseUrl" value="http://10.50.0.23:7922/api/room" />
+        <p class="help">Tanto <code>GET /api/getrooms</code> como <code>POST /api/room</code> usan el mismo puerto HTTP del servidor.</p>
+
+        <label for="clientType">Client Type</label>
+        <select id="clientType">
+          <option value="edopro">EDOPro</option>
+          <option value="mercury">Mercury</option>
+        </select>
+
+        <div id="edoproFields">
+          <label for="name">Room Name</label>
+          <input id="name" value="Test Room" />
+
+          <label for="banlist">Banlist</label>
+          <input id="banlist" value="2010.03 Edison" />
+
+          <div class="row">
+            <div>
+              <label for="mode">Mode</label>
+              <input id="mode" type="number" value="0" />
+            </div>
+            <div>
+              <label for="bestOf">Best Of</label>
+              <input id="bestOf" type="number" value="3" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="rule">Rule</label>
+              <input id="rule" type="number" value="4" />
+            </div>
+            <div>
+              <label for="teamQuantity">Team Quantity</label>
+              <input id="teamQuantity" type="number" value="1" />
+            </div>
+          </div>
+
+          <label for="tournament">Tournament</label>
+          <input id="tournament" placeholder="Optional" />
+        </div>
+
+        <div id="mercuryFields" style="display:none;">
+          <label for="command">Mercury Command</label>
+          <input id="command" value="edison,m" />
+          <p class="help">Para Mercury ranked, el comando crea la sala y se usa <code>username/loginPassword</code> para el login.</p>
+        </div>
+
+        <div class="check">
+          <input id="isRanked" type="checkbox" />
+          <label for="isRanked" style="margin:0;">Ranked room</label>
+        </div>
+
+        <div id="nicknameFields">
+          <label for="nickname">Nickname (Unranked)</label>
+          <input id="nickname" value="GuestPlayer" />
+        </div>
+
+        <div id="rankedFields" style="display:none;">
+          <label for="username">Username</label>
+          <input id="username" placeholder="Ranked username" />
+
+          <label for="loginPassword">Login Password</label>
+          <input id="loginPassword" type="password" placeholder="Ranked password" />
+        </div>
+
+        <div class="button-row">
+          <button id="testBtn" type="button">Test GET /api/getrooms</button>
+          <button id="sendBtn" type="button">Send POST /api/room</button>
+        </div>
+        <div class="button-row">
+          <button id="closeBtn" type="button">Close Selected Room</button>
+          <button id="clearBtn" type="button">Clear Response</button>
+        </div>
+        <p class="help">The exact JSON body being sent is shown on the right.</p>
+        <p class="help" id="lastCreatedInfo">Selected room: none</p>
+      </div>
+
+      <div class="panel">
+        <h2>Tracked Rooms</h2>
+        <div class="button-row">
+          <button id="refreshTrackedBtn" type="button">Refresh Tracked List</button>
+          <button id="clearTrackedBtn" type="button">Forget Tracked Rooms</button>
+        </div>
+        <div id="trackedRooms" class="tracked-list"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Payload</h2>
+        <pre id="payloadPreview"></pre>
+      </div>
+
+      <div class="panel" style="grid-column: 1 / -1;">
+        <h2>Response</h2>
+        <pre id="responseOutput">Waiting for request...</pre>
+        <div class="help">
+          If the request fails due to CORS, open this file from the same machine and make sure your HTTP server allows the origin.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const elements = {
+      baseUrl: document.getElementById("baseUrl"),
+      serverIp: document.getElementById("serverIp"),
+      httpPort: document.getElementById("httpPort"),
+      clientType: document.getElementById("clientType"),
+      edoproFields: document.getElementById("edoproFields"),
+      mercuryFields: document.getElementById("mercuryFields"),
+      nicknameFields: document.getElementById("nicknameFields"),
+      name: document.getElementById("name"),
+      banlist: document.getElementById("banlist"),
+      mode: document.getElementById("mode"),
+      bestOf: document.getElementById("bestOf"),
+      rule: document.getElementById("rule"),
+      teamQuantity: document.getElementById("teamQuantity"),
+      tournament: document.getElementById("tournament"),
+      command: document.getElementById("command"),
+      nickname: document.getElementById("nickname"),
+      isRanked: document.getElementById("isRanked"),
+      rankedFields: document.getElementById("rankedFields"),
+      username: document.getElementById("username"),
+      loginPassword: document.getElementById("loginPassword"),
+      testBtn: document.getElementById("testBtn"),
+      sendBtn: document.getElementById("sendBtn"),
+      closeBtn: document.getElementById("closeBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      refreshTrackedBtn: document.getElementById("refreshTrackedBtn"),
+      clearTrackedBtn: document.getElementById("clearTrackedBtn"),
+      payloadPreview: document.getElementById("payloadPreview"),
+      responseOutput: document.getElementById("responseOutput"),
+      lastCreatedInfo: document.getElementById("lastCreatedInfo"),
+      trackedRooms: document.getElementById("trackedRooms"),
+    };
+
+    const trackedRoomsStorageKey = "roomTesterTrackedRooms";
+    let trackedRooms = loadTrackedRooms();
+    let selectedRoomKey = trackedRooms[0] ? `${trackedRooms[0].clientType}:${trackedRooms[0].roomId}` : null;
+
+    function roomKey(room) {
+      return `${room.clientType}:${room.roomId}`;
+    }
+
+    function loadTrackedRooms() {
+      try {
+        const saved = localStorage.getItem(trackedRoomsStorageKey);
+        if (!saved) return [];
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function saveTrackedRooms() {
+      localStorage.setItem(trackedRoomsStorageKey, JSON.stringify(trackedRooms));
+    }
+
+    function getSelectedRoom() {
+      return trackedRooms.find((room) => roomKey(room) === selectedRoomKey) ?? null;
+    }
+
+    function updateSelectedRoomInfo() {
+      const selectedRoom = getSelectedRoom();
+      elements.lastCreatedInfo.textContent = selectedRoom
+        ? `Selected room: ${selectedRoom.clientType} #${selectedRoom.roomId} (${selectedRoom.roomName || "Unnamed"})`
+        : "Selected room: none";
+    }
+
+    function renderTrackedRooms() {
+      elements.trackedRooms.innerHTML = "";
+
+      if (trackedRooms.length === 0) {
+        elements.trackedRooms.innerHTML = '<div class="help">No tracked rooms yet.</div>';
+        updateSelectedRoomInfo();
+        return;
+      }
+
+      trackedRooms.forEach((room) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `tracked-item${roomKey(room) === selectedRoomKey ? " active" : ""}`;
+        button.innerHTML = `
+          <div class="tracked-title">${room.clientType.toUpperCase()} #${room.roomId}</div>
+          <div>${room.roomName || "Unnamed room"}</div>
+          <div class="tracked-meta">Ranked: ${room.ranked ? "yes" : "no"} | Creator: ${room.creatorName || "-"}</div>
+        `;
+        button.addEventListener("click", () => {
+          selectedRoomKey = roomKey(room);
+          renderTrackedRooms();
+        });
+        elements.trackedRooms.appendChild(button);
+      });
+
+      updateSelectedRoomInfo();
+    }
+
+    function rememberTrackedRoom(room) {
+      trackedRooms = trackedRooms.filter((item) => roomKey(item) !== roomKey(room));
+      trackedRooms.unshift(room);
+      selectedRoomKey = roomKey(room);
+      saveTrackedRooms();
+      renderTrackedRooms();
+    }
+
+    function removeTrackedRoom(room) {
+      trackedRooms = trackedRooms.filter((item) => roomKey(item) !== roomKey(room));
+      if (selectedRoomKey === roomKey(room)) {
+        selectedRoomKey = trackedRooms[0] ? roomKey(trackedRooms[0]) : null;
+      }
+      saveTrackedRooms();
+      renderTrackedRooms();
+    }
+
+    function parseOptionalNumber(value) {
+      if (value === "") return undefined;
+      const parsed = Number(value);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    }
+
+    function buildPayload() {
+      const clientType = elements.clientType.value;
+      const isRanked = elements.isRanked.checked;
+
+      if (clientType === "mercury") {
+        const payload = {
+          clientType,
+          command: elements.command.value.trim(),
+          isRanked,
+        };
+
+        if (isRanked) {
+          payload.username = elements.username.value.trim();
+          payload.loginPassword = elements.loginPassword.value;
+        } else {
+          payload.nickname = elements.nickname.value.trim();
+        }
+
+        return payload;
+      }
+
+      const payload = {
+        clientType,
+        name: elements.name.value.trim(),
+        banlist: elements.banlist.value.trim(),
+        mode: parseOptionalNumber(elements.mode.value),
+        bestOf: parseOptionalNumber(elements.bestOf.value),
+        rule: parseOptionalNumber(elements.rule.value),
+        teamQuantity: parseOptionalNumber(elements.teamQuantity.value),
+        isRanked,
+      };
+
+      if (!isRanked) {
+        payload.nickname = elements.nickname.value.trim();
+      }
+
+      if (elements.tournament.value.trim()) {
+        payload.tournament = elements.tournament.value.trim();
+      }
+
+      if (isRanked) {
+        payload.username = elements.username.value.trim();
+        payload.loginPassword = elements.loginPassword.value;
+      }
+
+      return payload;
+    }
+
+    function syncBaseUrlFromAddress() {
+      const ip = elements.serverIp.value.trim();
+      const port = elements.httpPort.value.trim();
+
+      if (ip && port) {
+        elements.baseUrl.value = `http://${ip}:${port}/api/room`;
+      }
+    }
+
+    function refreshVisibility() {
+      const mercury = elements.clientType.value === "mercury";
+      const ranked = elements.isRanked.checked;
+
+      syncBaseUrlFromAddress();
+      elements.edoproFields.style.display = mercury ? "none" : "";
+      elements.mercuryFields.style.display = mercury ? "" : "none";
+      elements.nicknameFields.style.display = ranked ? "none" : "";
+      elements.rankedFields.style.display = ranked ? "" : "none";
+
+      elements.payloadPreview.textContent = JSON.stringify(buildPayload(), null, 2);
+    }
+
+    async function sendRequest() {
+      const payload = buildPayload();
+      const rawUrl = elements.baseUrl.value.trim();
+      const url = rawUrl.endsWith("/api/room")
+        ? rawUrl
+        : `${rawUrl.replace(/\/$/, "")}/api/room`;
+
+      elements.responseOutput.textContent =
+        `Sending request to:\n${url}\n\nPayload:\n${JSON.stringify(payload, null, 2)}`;
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const text = await response.text();
+        let parsed = text;
+
+        try {
+          parsed = JSON.parse(text);
+        } catch (_) {
+          // keep raw text
+        }
+
+        if (response.ok && parsed && typeof parsed === "object" && parsed.roomId) {
+          rememberTrackedRoom({
+            clientType: payload.clientType,
+            roomId: parsed.roomId,
+            roomName: parsed.roomName || payload.name || payload.command || "",
+            ranked: Boolean(parsed.ranked ?? payload.isRanked),
+            creatorName: payload.isRanked ? payload.username : payload.nickname,
+          });
+        }
+
+        elements.responseOutput.textContent =
+          `Status: ${response.status} ${response.statusText}\n\n` +
+          (typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2));
+      } catch (error) {
+        elements.responseOutput.textContent =
+          `Request failed.\n\nURL: ${url}\n\n${error instanceof Error ? error.message : String(error)}\n\n` +
+          "Si no llega nada al servidor, normalmente es por CORS, IP/puerto incorrectos o porque el HTTP server no esta escuchando en esa IP.";
+      }
+    }
+
+    async function testConnection() {
+      const ip = elements.serverIp.value.trim();
+      const port = elements.httpPort.value.trim();
+      const url = `http://${ip}:${port}/api/getrooms`;
+
+      elements.responseOutput.textContent = `Testing connection to:\n${url}`;
+
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+          },
+        });
+
+        const text = await response.text();
+        let parsed = text;
+
+        try {
+          parsed = JSON.parse(text);
+        } catch (_) {
+          // keep raw text
+        }
+
+        elements.responseOutput.textContent =
+          `Status: ${response.status} ${response.statusText}\n\n` +
+          `URL: ${url}\n\n` +
+          (typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2));
+      } catch (error) {
+        elements.responseOutput.textContent =
+          `Connection test failed.\n\nURL: ${url}\n\n${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+
+    async function closeLastRoom() {
+      const selectedRoom = getSelectedRoom();
+
+      if (!selectedRoom) {
+        elements.responseOutput.textContent = "No tracked room selected.";
+        return;
+      }
+
+      const url = `http://${elements.serverIp.value.trim()}:${elements.httpPort.value.trim()}/api/room/close`;
+      const payload = {
+        clientType: selectedRoom.clientType,
+        roomId: selectedRoom.roomId,
+      };
+
+      elements.responseOutput.textContent =
+        `Closing room:\n${JSON.stringify(payload, null, 2)}\n\nURL:\n${url}`;
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const text = await response.text();
+        let parsed = text;
+
+        try {
+          parsed = JSON.parse(text);
+        } catch (_) {
+          // keep raw text
+        }
+
+        if (response.ok) {
+          removeTrackedRoom(selectedRoom);
+        }
+
+        elements.responseOutput.textContent =
+          `Status: ${response.status} ${response.statusText}\n\n` +
+          (typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2));
+      } catch (error) {
+        elements.responseOutput.textContent =
+          `Close request failed.\n\n${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+
+    [
+      elements.clientType,
+      elements.name,
+      elements.banlist,
+      elements.mode,
+      elements.bestOf,
+      elements.rule,
+      elements.teamQuantity,
+      elements.tournament,
+      elements.command,
+      elements.nickname,
+      elements.isRanked,
+      elements.username,
+      elements.loginPassword,
+    ].forEach((element) => {
+      element.addEventListener("input", refreshVisibility);
+      element.addEventListener("change", refreshVisibility);
+    });
+
+    [
+      elements.serverIp,
+      elements.httpPort,
+    ].forEach((element) => {
+      element.addEventListener("input", () => {
+        syncBaseUrlFromAddress();
+        refreshVisibility();
+      });
+      element.addEventListener("change", () => {
+        syncBaseUrlFromAddress();
+        refreshVisibility();
+      });
+    });
+
+    elements.testBtn.addEventListener("click", testConnection);
+    elements.sendBtn.addEventListener("click", sendRequest);
+    elements.closeBtn.addEventListener("click", closeLastRoom);
+    elements.refreshTrackedBtn.addEventListener("click", renderTrackedRooms);
+    elements.clearTrackedBtn.addEventListener("click", () => {
+      trackedRooms = [];
+      selectedRoomKey = null;
+      saveTrackedRooms();
+      renderTrackedRooms();
+    });
+    elements.clearBtn.addEventListener("click", () => {
+      elements.responseOutput.textContent = "Waiting for request...";
+    });
+
+    syncBaseUrlFromAddress();
+    refreshVisibility();
+    renderTrackedRooms();
+  </script>
+</body>
+</html>
+

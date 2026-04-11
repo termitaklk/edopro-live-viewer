@@ -1,0 +1,30 @@
+# Dependencias
+node_modules/
+
+# Logs de runtime (pueden pesar cientos de MB)
+logs/
+
+# Archivos temporales de desarrollo
+.tmp_*.js
+.tmp_*.html
+
+# Snapshots manuales (reemplazados por git)
+restore-points/
+
+# Bases de datos de cartas (binarios SQLite, descargables por separado)
+data/*.cdb
+
+# Imágenes de cartas (110MB+, no van en git)
+pics/
+
+# Repos externos embebidos
+repositories/
+
+# Variables de entorno locales
+.env
+front-end/.env
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.log

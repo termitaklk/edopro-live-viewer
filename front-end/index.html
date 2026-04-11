@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YGOPro Live Viewer</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --panel-2: #1f2630;
+            --text: #e6edf3;
+            --muted: #8b98a5;
+            --accent: #35c2ff;
+            --accent-2: #53d769;
+            --border: #2f3945;
+            --danger: #ff7b72;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color-scheme: dark;
+            background:
+                radial-gradient(circle at top, rgba(53, 194, 255, 0.16), transparent 25%),
+                radial-gradient(circle at right, rgba(83, 215, 105, 0.12), transparent 22%),
+                var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .wrap {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 32px;
+        }
+
+        .sub {
+            margin: 0 0 24px;
+            color: var(--muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 16px;
+        }
+
+        .panel {
+            background: linear-gradient(180deg, var(--panel), var(--panel-2));
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .panel h2 {
+            margin: 0 0 16px;
+            font-size: 18px;
+        }
+
+        label {
+            display: block;
+            margin: 12px 0 6px;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        input, button, select {
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text);
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        select,
+        select option,
+        select optgroup {
+            background-color: #17202b;
+            color: var(--text);
+        }
+
+        button {
+            cursor: pointer;
+            border: 0;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent), var(--accent-2));
+            color: #071017;
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .button-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .connection-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px 10px;
+            align-items: end;
+        }
+
+        .connection-grid .field label {
+            margin-top: 0;
+            margin-bottom: 4px;
+            font-size: 12px;
+            line-height: 1.2;
+            min-height: 30px;
+        }
+
+        .connection-grid .field input,
+        .connection-grid .field select {
+            padding: 8px 10px;
+            min-height: 40px;
+            font-size: 13px;
+        }
+
+        .rooms-panel-head {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .rooms-panel-head h2 {
+            margin: 0;
+            text-align: center;
+        }
+
+        .rooms-filter-row {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            align-items: end;
+        }
+
+        .rooms-filter-row label {
+            margin: 0 0 4px;
+            font-size: 12px;
+        }
+
+        .rooms {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .room-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .room-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+            font-size: 13px;
+            line-height: 1.25;
+        }
+
+        .room-meta {
+            color: var(--muted);
+            font-size: 11px;
+            margin-bottom: 8px;
+            line-height: 1.35;
+        }
+
+        .room-users {
+            font-size: 11px;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .room-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .room-actions button {
+            padding: 6px 8px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #0a0d12;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            min-height: 220px;
+            max-height: 360px;
+            overflow: auto;
+        }
+
+        .status {
+            margin-bottom: 14px;
+            color: var(--muted);
+        }
+
+        .danger {
+            color: var(--danger);
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 16px;
+        }
+
+        .modal-backdrop.show {
+            display: flex;
+        }
+
+        .modal {
+            width: min(460px, 100%);
+            background: linear-gradient(180deg, var(--panel), var(--panel-2));
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+        }
+
+        .modal h3 {
+            margin: 0 0 8px;
+            font-size: 18px;
+        }
+
+        .modal p {
+            margin: 0 0 10px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .modal-error {
+            min-height: 18px;
+            margin-top: 8px;
+            color: var(--danger);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .modal-actions {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 1380px) {
+            .rooms {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 1280px) {
+            .rooms-filter-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 1160px) {
+            .rooms {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 760px) {
+            .rooms {
+                grid-template-columns: 1fr;
+            }
+
+            .rooms-filter-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 560px) {
+            .connection-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>YGOPro Live Viewer</h1>
+        <p class="sub">Lista salas reales del servidor, selecciona una y abre el visor en vivo.</p>
+
+        <div class="grid">
+            <div class="panel">
+                <h2>Connection</h2>
+
+                <div class="connection-grid">
+                    <div class="field">
+                        <label for="apiBase">Viewer API Base</label>
+                        <input id="apiBase" value="">
+                    </div>
+
+                    <div class="field">
+                        <label for="serverApiBase">Room List API Base</label>
+                        <input id="serverApiBase" value="http://server.evolutionygo.com:7922">
+                    </div>
+
+                    <div class="field">
+                        <label for="duelPort">Duel TCP Port</label>
+                        <input id="duelPort" value="7911">
+                    </div>
+
+                    <div class="field">
+                        <label for="nickname">Nickname / Username</label>
+                        <input id="nickname" value="WebsiteView">
+                    </div>
+
+                    <div class="field">
+                        <label for="loginPassword">Login Password (ranked)</label>
+                        <input id="loginPassword" type="password" placeholder="Only for ranked rooms">
+                    </div>
+
+                    <div class="field">
+                        <label for="roomPassword">Room Password</label>
+                        <input id="roomPassword" type="password" placeholder="Only if room needs pass">
+                    </div>
+
+                    <div class="field">
+                        <label for="asSpectator">Join then switch to spectator</label>
+                        <select id="asSpectator">
+                            <option value="true" selected>Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button id="refreshBtn" type="button">Refresh Rooms</button>
+                    <button id="testBtn" type="button" class="secondary">Test APIs</button>
+                </div>
+
+                <div class="status" id="statusText">Waiting for action...</div>
+
+                <h2>Response</h2>
+                <pre id="responseOutput">Waiting for request...</pre>
+            </div>
+
+            <div class="panel">
+                <div class="rooms-panel-head">
+                    <h2>Available Rooms</h2>
+                    <div class="rooms-filter-row">
+                        <div>
+                            <label for="clientFilter">Client</label>
+                            <select id="clientFilter">
+                                <option value="all" selected>All</option>
+                                <option value="edopro">EDOPro</option>
+                                <option value="mercury">Mercury</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="passFilter">Password</label>
+                            <select id="passFilter">
+                                <option value="all" selected>All</option>
+                                <option value="with">With password</option>
+                                <option value="without">Without password</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="stateFilter">State</label>
+                            <select id="stateFilter">
+                                <option value="all" selected>All</option>
+                                <option value="started">Started</option>
+                                <option value="lobby">Lobby (not started)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="refreshBtn">Quick Action</label>
+                            <button id="refreshBtnRooms" type="button" class="secondary">Refresh</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="roomsContainer" class="rooms"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="passwordModal" class="modal-backdrop" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
+            <h3 id="passwordModalTitle">Room Password Required</h3>
+            <p id="passwordModalText">Enter room password.</p>
+            <label for="passwordModalInput">Password</label>
+            <input id="passwordModalInput" type="password" autocomplete="current-password">
+            <div id="passwordModalError" class="modal-error" role="status" aria-live="polite"></div>
+            <div class="modal-actions">
+                <button id="passwordModalConfirm" type="button">Open Room</button>
+                <button id="passwordModalCancel" type="button" class="secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const elements = {
+            apiBase: document.getElementById("apiBase"),
+            serverApiBase: document.getElementById("serverApiBase"),
+            duelPort: document.getElementById("duelPort"),
+            nickname: document.getElementById("nickname"),
+            loginPassword: document.getElementById("loginPassword"),
+            roomPassword: document.getElementById("roomPassword"),
+            asSpectator: document.getElementById("asSpectator"),
+            refreshBtn: document.getElementById("refreshBtn"),
+            refreshBtnRooms: document.getElementById("refreshBtnRooms"),
+            testBtn: document.getElementById("testBtn"),
+            clientFilter: document.getElementById("clientFilter"),
+            passFilter: document.getElementById("passFilter"),
+            stateFilter: document.getElementById("stateFilter"),
+            statusText: document.getElementById("statusText"),
+            responseOutput: document.getElementById("responseOutput"),
+            roomsContainer: document.getElementById("roomsContainer"),
+            passwordModal: document.getElementById("passwordModal"),
+            passwordModalText: document.getElementById("passwordModalText"),
+            passwordModalInput: document.getElementById("passwordModalInput"),
+            passwordModalError: document.getElementById("passwordModalError"),
+            passwordModalConfirm: document.getElementById("passwordModalConfirm"),
+            passwordModalCancel: document.getElementById("passwordModalCancel"),
+        };
+
+        let rooms = [];
+
+        function saveSettings() {
+            localStorage.setItem("viewerApiBase", elements.apiBase.value.trim());
+            localStorage.setItem("viewerServerApiBase", elements.serverApiBase.value.trim());
+            localStorage.setItem("viewerDuelPort", elements.duelPort.value.trim());
+            localStorage.setItem("viewerNickname", elements.nickname.value.trim());
+            localStorage.setItem("viewerLoginPassword", elements.loginPassword.value);
+            localStorage.setItem("viewerAsSpectator", elements.asSpectator.value);
+        }
+
+        function loadSettings() {
+            const savedApiBase = localStorage.getItem("viewerApiBase");
+            const normalizedCurrentOrigin = window.location.origin.replace(/\/$/, "");
+            const mustResetSavedApiBase =
+                !savedApiBase ||
+                savedApiBase.includes("localhost:3000") ||
+                savedApiBase.includes("127.0.0.1:3000");
+
+            elements.apiBase.value = mustResetSavedApiBase ? normalizedCurrentOrigin : savedApiBase;
+            elements.serverApiBase.value = localStorage.getItem("viewerServerApiBase") || elements.serverApiBase.value;
+            elements.duelPort.value = localStorage.getItem("viewerDuelPort") || elements.duelPort.value;
+            elements.nickname.value = localStorage.getItem("viewerNickname") || elements.nickname.value;
+            elements.loginPassword.value = localStorage.getItem("viewerLoginPassword") || "";
+            elements.roomPassword.value = "";
+            localStorage.removeItem("viewerRoomPassword");
+            elements.asSpectator.value = localStorage.getItem("viewerAsSpectator") || "true";
+
+            if (mustResetSavedApiBase) {
+                localStorage.setItem("viewerApiBase", normalizedCurrentOrigin);
+            }
+        }
+
+        function normalizeBase(url) {
+            return url.trim().replace(/\/$/, "");
+        }
+
+        function usersLabel(room) {
+            if (!Array.isArray(room.users) || room.users.length === 0) {
+                return "No users";
+            }
+            return room.users.map((user) => user.name || `Pos ${user.pos}`).join(", ");
+        }
+
+        function roomMatchesFilter(room, filter) {
+            if (!filter) return true;
+            const haystack = [
+                room.roomid,
+                room.roomname,
+                room.roomnotes,
+                usersLabel(room),
+            ].join(" ").toLowerCase();
+            return haystack.includes(filter.toLowerCase());
+        }
+
+        function isRankedRoom(room) {
+            const notes = String(room?.roomnotes || "").toLowerCase();
+            return notes.includes("ranked");
+        }
+
+        function roomNeedsPassword(room) {
+            const value = room?.needpass;
+            if (typeof value === "boolean") return value;
+            if (typeof value === "number") return value !== 0;
+            if (typeof value === "string") {
+                const normalized = value.trim().toLowerCase();
+                return normalized === "1" || normalized === "true" || normalized === "yes";
+            }
+            return false;
+        }
+
+        function inferRoomClient(room) {
+            const roomName = String(room?.roomname || "").trim();
+            return roomName ? "mercury" : "edopro";
+        }
+
+        function roomStarted(room) {
+            const status = room?.istart;
+            if (typeof status === "boolean") return status;
+            if (typeof status === "number") return status > 0;
+            if (typeof status === "string") {
+                const normalized = status.trim().toLowerCase();
+                if (!normalized) return false;
+                if (normalized === "waiting" || normalized === "lobby" || normalized === "0" || normalized === "false") {
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        function roomMatchesExtraFilters(room) {
+            const clientMode = elements.clientFilter.value;
+            const passMode = elements.passFilter.value;
+            const stateMode = elements.stateFilter.value;
+            const roomClient = String(room.roomClient || inferRoomClient(room)).toLowerCase();
+            const needsPass = roomNeedsPassword(room);
+            const started = roomStarted(room);
+
+            if (clientMode !== "all" && roomClient !== clientMode) return false;
+            if (passMode === "with" && !needsPass) return false;
+            if (passMode === "without" && needsPass) return false;
+            if (stateMode === "started" && !started) return false;
+            if (stateMode === "lobby" && started) return false;
+            return true;
+        }
+
+        function renderRooms() {
+            const filter = "";
+            const visibleRooms = rooms.filter((room) =>
+                roomMatchesFilter(room, filter) && roomMatchesExtraFilters(room)
+            );
+
+            if (visibleRooms.length === 0) {
+                elements.roomsContainer.innerHTML = '<div class="status">No rooms found.</div>';
+                return;
+            }
+
+            elements.roomsContainer.innerHTML = "";
+
+            visibleRooms.forEach((room) => {
+                const card = document.createElement("div");
+                card.className = "room-card";
+                const roomClient = inferRoomClient(room);
+                card.innerHTML = `
+                    <div class="room-title">#${room.roomid} ${room.roomname || "(No room name)"}</div>
+                    <div class="room-meta">
+                        Client: ${roomClient}<br>
+                        Notes: ${room.roomnotes || "-"}<br>
+                        Mode: ${room.roommode} | Rule: ${room.rule} | BO: ${room.best_of}<br>
+                        LP: ${room.start_lp} | Need Pass: ${roomNeedsPassword(room) ? "yes" : "no"}<br>
+                        Access: ${isRankedRoom(room) ? "Ranked login required" : "Unranked / no login required"}
+                    </div>
+                    <div class="room-users"><strong>Users:</strong> ${usersLabel(room)}</div>
+                    <div class="room-actions">
+                        <button type="button" data-action="watch" data-roomid="${room.roomid}">Watch</button>
+                        <button type="button" data-action="debug" data-roomid="${room.roomid}" class="secondary">Raw Debug</button>
+                    </div>
+                `;
+                elements.roomsContainer.appendChild(card);
+            });
+        }
+
+        function askRoomPassword(roomId, initialValue, initialError = "") {
+            return new Promise((resolve) => {
+                let settled = false;
+                const finish = (value) => {
+                    if (settled) return;
+                    settled = true;
+                    const activeEl = document.activeElement;
+                    if (activeEl && elements.passwordModal.contains(activeEl) && typeof activeEl.blur === "function") {
+                        activeEl.blur();
+                    }
+                    elements.passwordModal.classList.remove("show");
+                    elements.passwordModal.setAttribute("aria-hidden", "true");
+                    elements.passwordModalInput.value = "";
+                    elements.passwordModalError.textContent = "";
+                    elements.passwordModalConfirm.removeEventListener("click", onConfirm);
+                    elements.passwordModalCancel.removeEventListener("click", onCancel);
+                    elements.passwordModalInput.removeEventListener("keydown", onKeyDown);
+                    elements.passwordModal.removeEventListener("click", onBackdropClick);
+                    resolve(value);
+                };
+
+                const onConfirm = () => {
+                    const value = elements.passwordModalInput.value.trim();
+                    if (!value) {
+                        elements.passwordModalError.textContent = "Password is required for this room.";
+                        elements.passwordModalInput.focus();
+                        return;
+                    }
+                    finish(value);
+                };
+                const onCancel = () => finish(null);
+                const onKeyDown = (event) => {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        onConfirm();
+                        return;
+                    }
+                    if (event.key === "Escape") {
+                        event.preventDefault();
+                        onCancel();
+                    }
+                };
+                const onBackdropClick = (event) => {
+                    if (event.target === elements.passwordModal) {
+                        onCancel();
+                    }
+                };
+
+                elements.passwordModalText.textContent = `Room #${roomId} (EDOPro) has a password. Enter it to open the room.`;
+                elements.passwordModalInput.value = initialValue || "";
+                elements.passwordModalError.textContent = initialError || "";
+                elements.passwordModal.classList.add("show");
+                elements.passwordModal.setAttribute("aria-hidden", "false");
+                elements.passwordModalConfirm.addEventListener("click", onConfirm);
+                elements.passwordModalCancel.addEventListener("click", onCancel);
+                elements.passwordModalInput.addEventListener("keydown", onKeyDown);
+                elements.passwordModal.addEventListener("click", onBackdropClick);
+                elements.passwordModalInput.focus();
+                elements.passwordModalInput.select();
+            });
+        }
+
+        async function fetchJson(url, options = {}) {
+            const response = await fetch(url, options);
+            const text = await response.text();
+            let parsed = text;
+            try {
+                parsed = JSON.parse(text);
+            } catch (_) {
+                // keep raw text
+            }
+            return { response, parsed };
+        }
+
+        async function refreshRooms() {
+            saveSettings();
+            const url = `${normalizeBase(elements.apiBase.value)}/api/rooms?serverBase=${encodeURIComponent(normalizeBase(elements.serverApiBase.value))}`;
+            elements.statusText.textContent = "Loading rooms...";
+
+            try {
+                const { response, parsed } = await fetchJson(url);
+                elements.responseOutput.textContent =
+                    `Status: ${response.status} ${response.statusText}\n\n` +
+                    (typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2));
+
+                if (!response.ok) {
+                    elements.statusText.textContent = "Could not load room list.";
+                    return;
+                }
+
+                rooms = Array.isArray(parsed.rooms)
+                    ? parsed.rooms.map((room) => ({
+                        ...room,
+                        roomClient: room.roomClient || inferRoomClient(room),
+                    }))
+                    : [];
+                elements.statusText.textContent = `${rooms.length} room(s) loaded.`;
+                renderRooms();
+            } catch (error) {
+                elements.statusText.textContent = "Room list request failed.";
+                elements.responseOutput.textContent = error instanceof Error ? error.message : String(error);
+            }
+        }
+
+        async function testApis() {
+            saveSettings();
+            const viewerUrl = `${normalizeBase(elements.apiBase.value)}/api/rooms?serverBase=${encodeURIComponent(normalizeBase(elements.serverApiBase.value))}`;
+            const serverUrl = `${normalizeBase(elements.serverApiBase.value)}/api/getrooms`;
+            elements.statusText.textContent = "Testing APIs...";
+
+            try {
+                const [viewerResult, serverResult] = await Promise.all([
+                    fetchJson(viewerUrl),
+                    fetchJson(serverUrl),
+                ]);
+
+                elements.responseOutput.textContent =
+                    `Viewer API: ${viewerResult.response.status} ${viewerResult.response.statusText}\n` +
+                    `URL: ${viewerUrl}\n\n` +
+                    `Server Room API: ${serverResult.response.status} ${serverResult.response.statusText}\n` +
+                    `URL: ${serverUrl}\n\n` +
+                    `Viewer sample:\n${typeof viewerResult.parsed === "string" ? viewerResult.parsed : JSON.stringify(viewerResult.parsed, null, 2)}\n\n` +
+                    `Server sample:\n${typeof serverResult.parsed === "string" ? serverResult.parsed : JSON.stringify(serverResult.parsed, null, 2)}`;
+
+                elements.statusText.textContent = "API test finished.";
+            } catch (error) {
+                elements.statusText.textContent = "API test failed.";
+                elements.responseOutput.textContent = error instanceof Error ? error.message : String(error);
+            }
+        }
+
+        async function watchRoom(roomId, mode = "viewer") {
+            saveSettings();
+            const url = `${normalizeBase(elements.apiBase.value)}/api/watch`;
+            const selectedRoom = rooms.find((room) => String(room.roomid) === String(roomId)) || null;
+            const missingRankedLogin = isRankedRoom(selectedRoom) && !elements.loginPassword.value;
+            const roomClient = selectedRoom?.roomClient || inferRoomClient(selectedRoom);
+            const mustPromptRoomPassword = roomClient === "edopro" && roomNeedsPassword(selectedRoom);
+
+            if (missingRankedLogin) {
+                elements.statusText.textContent = `Room ${roomId} is ranked: enter Username and Login Password first.`;
+                elements.responseOutput.textContent =
+                    `Warning: room #${roomId} looks ranked based on roomnotes (${selectedRoom?.roomnotes || "-"})\n` +
+                    `The duel server requires PLAYER_INFO as username:password for ranked joins.\n\n` +
+                    `Fill these fields before trying again:\n` +
+                    `- Nickname / Username\n` +
+                    `- Login Password (ranked)\n` +
+                    `${roomNeedsPassword(selectedRoom) ? `- Room Password\n` : ""}`;
+                return;
+            }
+
+            let resolvedRoomPassword = elements.roomPassword.value;
+            let modalErrorMessage = "";
+
+            while (true) {
+                if (mustPromptRoomPassword) {
+                    const enteredPassword = await askRoomPassword(roomId, resolvedRoomPassword || elements.roomPassword.value || "", modalErrorMessage);
+
+                    if (enteredPassword === null) {
+                        elements.statusText.textContent = `Open canceled for room ${roomId}: no password entered.`;
+                        return;
+                    }
+
+                    resolvedRoomPassword = enteredPassword.trim();
+                    elements.roomPassword.value = resolvedRoomPassword;
+                    saveSettings();
+                }
+
+                const payload = {
+                    id: String(roomId),
+                    serverBase: normalizeBase(elements.serverApiBase.value),
+                    viewerBaseUrl: normalizeBase(elements.apiBase.value),
+                    duelPort: elements.duelPort.value.trim() || "7911",
+                    mode,
+                    nickname: elements.nickname.value.trim() || "WebsiteView",
+                    loginPassword: elements.loginPassword.value,
+                    roomPassword: resolvedRoomPassword,
+                    asSpectator: elements.asSpectator.value === "true",
+                    clientFlow: roomClient,
+                    room: selectedRoom ? {
+                        ...selectedRoom,
+                        roomClient,
+                    } : null,
+                };
+
+                elements.statusText.textContent = mode === "debug"
+                    ? `Opening raw debugger for room ${roomId}...`
+                    : `Opening viewer for room ${roomId}...`;
+
+                try {
+                    const { response, parsed } = await fetchJson(url, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(payload),
+                    });
+
+                    elements.responseOutput.textContent =
+                        `Status: ${response.status} ${response.statusText}\n\n` +
+                        (typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2));
+
+                    if (response.ok) {
+                        elements.statusText.textContent = `${mode === "debug" ? "Raw debugger" : "Viewer"} launched for room ${roomId}.`;
+                        return;
+                    }
+
+                    const parsedErrorCode = typeof parsed === "object" && parsed ? String(parsed.errorCode || "") : "";
+                    const parsedErrorMessage = typeof parsed === "object" && parsed ? String(parsed.error || "") : "";
+                    if (
+                        mustPromptRoomPassword &&
+                        (
+                            parsedErrorCode === "ROOM_PASSWORD_INVALID" ||
+                            parsedErrorCode === "ROOM_JOIN_UNABLE" ||
+                            parsedErrorCode === "ROOM_JOIN_FAILED" ||
+                            parsedErrorCode === "ROOM_JOIN_TIMEOUT"
+                        )
+                    ) {
+                        modalErrorMessage = (
+                            parsedErrorCode === "ROOM_JOIN_TIMEOUT"
+                                ? "No confirmation from server. Try password again."
+                                : "Wrong password. Try again."
+                        );
+                        elements.statusText.textContent = `Wrong room password for room ${roomId}.`;
+                        continue;
+                    }
+
+                    elements.statusText.textContent = parsedErrorMessage
+                        ? `Could not launch ${mode === "debug" ? "raw debugger" : "viewer"} for room ${roomId}: ${parsedErrorMessage}`
+                        : `Could not launch ${mode === "debug" ? "raw debugger" : "viewer"} for room ${roomId}.`;
+                    return;
+                } catch (error) {
+                    elements.statusText.textContent = `${mode === "debug" ? "Raw debug" : "Watch"} request failed for room ${roomId}.`;
+                    elements.responseOutput.textContent = error instanceof Error ? error.message : String(error);
+                    return;
+                }
+            }
+        }
+
+        elements.refreshBtn.addEventListener("click", refreshRooms);
+        elements.refreshBtnRooms.addEventListener("click", refreshRooms);
+        elements.testBtn.addEventListener("click", testApis);
+        elements.clientFilter.addEventListener("change", renderRooms);
+        elements.passFilter.addEventListener("change", renderRooms);
+        elements.stateFilter.addEventListener("change", renderRooms);
+        elements.apiBase.addEventListener("change", saveSettings);
+        elements.serverApiBase.addEventListener("change", saveSettings);
+        elements.duelPort.addEventListener("change", saveSettings);
+        elements.nickname.addEventListener("change", saveSettings);
+        elements.loginPassword.addEventListener("change", saveSettings);
+        elements.roomPassword.addEventListener("change", saveSettings);
+        elements.asSpectator.addEventListener("change", saveSettings);
+        elements.roomsContainer.addEventListener("click", (event) => {
+            const button = event.target.closest("button");
+            if (!button) return;
+            const roomId = button.dataset.roomid;
+            if (!roomId) return;
+            if (button.dataset.action === "watch") {
+                void watchRoom(roomId, "viewer");
+            }
+            if (button.dataset.action === "debug") {
+                void watchRoom(roomId, "debug");
+            }
+        });
+
+        loadSettings();
+        renderRooms();
+        void refreshRooms();
+        window.setInterval(() => {
+            void refreshRooms();
+        }, 3000);
+    </script>
+</body>
+</html>

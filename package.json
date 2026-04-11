@@ -1,0 +1,25 @@
+{
+  "name": "live",
+  "version": "1.0.0",
+  "description": "",
+  "main": "Main.js",
+  "scripts": {
+    "start": "node room-tester-server.js",
+    "start:legacy": "node index.js",
+    "test": "npm run test:visor-all",
+    "test:visor-core": "node tests/visor-regression.test.js",
+    "test:visor-room-password": "node tests/visor-room-password-guard.test.js",
+    "test:visor-layout": "node tests/visor-layout-guard.test.js",
+    "test:visor-all": "npm run test:visor-core && npm run test:visor-room-password && npm run test:visor-layout",
+    "room-tester": "node room-tester-server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "net": "^1.0.2"
+  }
+}

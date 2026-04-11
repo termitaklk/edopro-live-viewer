@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raw TCP Debugger</title>
+    <style>
+        body {
+            margin: 0;
+            background: #0a0d12;
+            color: #e6edf3;
+            font-family: Consolas, "Courier New", monospace;
+            padding: 16px;
+        }
+
+        .head {
+            margin-bottom: 16px;
+        }
+
+        .meta {
+            color: #9aa6b2;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        pre {
+            margin: 0;
+            background: #11161d;
+            border: 1px solid #2f3945;
+            border-radius: 10px;
+            padding: 12px;
+            min-height: calc(100vh - 180px);
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="head">
+        <h2>Raw TCP Debugger</h2>
+        <div id="meta" class="meta">Waiting for session...</div>
+    </div>
+    <pre id="log">Waiting for TCP data...</pre>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const uniqueId = params.get('id');
+        const meta = document.getElementById('meta');
+        const log = document.getElementById('log');
+        const events = new EventSource('/events');
+        const seen = new Set();
+        const MAX_LOG_LINES = 250;
+
+        function append(line) {
+            const ts = new Date().toLocaleTimeString();
+            const currentLines = log.textContent ? log.textContent.split('\n').filter(Boolean) : [];
+            currentLines.unshift(`[${ts}] ${line}`);
+            log.textContent = `${currentLines.slice(0, MAX_LOG_LINES).join('\n')}\n`;
+        }
+
+        function keyOf(item) {
+            return `${item.timestamp}|${item.type}|${JSON.stringify(item.payload)}`;
+        }
+
+        function format(item) {
+            const payload = item.payload || {};
+            if (item.type === 'socket_send') {
+                return `SOCKET OUT ${payload.description} | hex=${payload.hex}`;
+            }
+            if (item.type === 'socket_frame') {
+                return `SOCKET IN frame #${payload.messageCount} | bytes=${payload.byteLength} | hex=${payload.hex}`;
+            }
+            if (item.type === 'socket_buffer_pending') {
+                return `SOCKET pending buffer | bytes=${payload.pendingBytes} | hex=${payload.pendingHex}`;
+            }
+            if (item.type === 'socket_segment') {
+                return `SOCKET ${payload.messageName} (0x${Number(payload.messageType).toString(16)}) | valid=${payload.isValid} | hex=${payload.segment}`;
+            }
+            if (item.type === 'socket_unhandled') {
+                return `UNHANDLED ${payload.messageName} (0x${Number(payload.messageType).toString(16)}) | hex=${payload.segment}`;
+            }
+            if (item.type === 'connection_open') {
+                return `CONNECTION OPEN room=${payload.roomId} host=${payload.serverHost}:${payload.serverPort}`;
+            }
+            if (item.type === 'connection_end') {
+                return `CONNECTION END room=${payload.roomId}`;
+            }
+            if (item.type === 'connection_error') {
+                return `CONNECTION ERROR ${payload.error}`;
+            }
+            return `${item.type} ${JSON.stringify(payload)}`;
+        }
+
+        async function loadSnapshot() {
+            if (!uniqueId) return;
+            try {
+                const response = await fetch(`/api/session/${uniqueId}?t=${Date.now()}&includeReplay=0`, { cache: 'no-store' });
+                if (!response.ok) {
+                    meta.textContent = `Session ${uniqueId} not ready yet (${response.status})`;
+                    return;
+                }
+                const data = await response.json();
+                const session = data.session;
+                meta.innerHTML =
+                    `Unique ID: ${uniqueId}<br>` +
+                    `Flow: ${session.clientFlow || '-'}<br>` +
+                    `Mode: ${session.mode || '-'}<br>` +
+                    `Phase: ${session.phase || '-'}<br>` +
+                    `Room: ${session.room ? `${session.room.roomid} ${session.room.roomname || ''}` : '-'}`;
+
+                (session.lastEvents || [])
+                    .slice()
+                    .reverse()
+                    .forEach((item) => {
+                        const key = keyOf(item);
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        append(`[snapshot] ${format(item)}`);
+                    });
+            } catch (error) {
+                append(`SNAPSHOT ERROR ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        events.addEventListener('message', (event) => {
+            const data = JSON.parse(event.data);
+            if (data.uniqueId && data.uniqueId !== uniqueId) {
+                return;
+            }
+            if (data.message === 'connected') {
+                append('Connected to SSE stream');
+                return;
+            }
+            append(format({ type: data.message, payload: data.payload || {} }));
+        });
+
+        events.addEventListener('error', () => {
+            append('SSE disconnected');
+        });
+
+        function closeViewerSession() {
+            if (!uniqueId) {
+                return;
+            }
+
+            const url = `/api/session/${uniqueId}/close`;
+            try {
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(url, new Blob(['{}'], { type: 'application/json' }));
+                    return;
+                }
+            } catch (_) {
+                // ignore and fallback
+            }
+
+            try {
+                fetch(url, {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}',
+                }).catch(() => {});
+            } catch (_) {
+                // ignore
+            }
+        }
+
+        window.addEventListener('pagehide', closeViewerSession);
+        window.addEventListener('beforeunload', closeViewerSession);
+
+        void loadSnapshot();
+        window.setInterval(() => void loadSnapshot(), 1000);
+    </script>
+</body>
+</html>
