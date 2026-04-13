@@ -131,6 +131,7 @@ function startWatchSession(req, res) {
     connectionOptions.asSpectator = asSpectator !== false;
     connectionOptions.clientFlow = resolvedClientFlow;
     connectionOptions.viewerBaseUrl = viewerBaseUrl || `${req.protocol}://${req.get('host')}`;
+    connectionOptions.autoOpenViewer = false;
 
     console.log(`Recibido ID: ${id} con uniqueId: ${uniqueId}`);
     seedSession(uniqueId, normalizedRoom);

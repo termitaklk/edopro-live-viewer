@@ -66,7 +66,7 @@ function buildJoinGamePacket(roomId, roomPassword = '') {
 }
 
 function openViewer(uniqueId, roomMeta = null, openMode = 'viewer', viewerBaseUrlOverride = '') {
-    const viewerBaseUrl = (viewerBaseUrlOverride || process.env.VIEWER_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const viewerBaseUrl = (viewerBaseUrlOverride || process.env.VIEWER_BASE_URL || 'http://localhost:8088').replace(/\/$/, '');
     if (openMode === 'debug') {
         const url = `${viewerBaseUrl}/raw-viewer.html?id=${uniqueId}`;
 

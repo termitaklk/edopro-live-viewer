@@ -595,6 +595,10 @@
             display: none !important;
         }
 
+        #duelBoard.hidden {
+            display: none !important;
+        }
+
         .cell.debug-target {
             outline: 3px solid #ff3b3b !important;
             box-shadow: 0 0 18px rgba(255, 59, 59, 0.95) !important;
@@ -757,6 +761,20 @@
             color: #92f5ff !important;
             text-shadow: 0 0 10px rgba(146, 245, 255, 0.45), 0 0 18px rgba(146, 245, 255, 0.22);
             filter: brightness(1.08);
+        }
+
+        #babylonBoardCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            display: block;
+            border-radius: 12px;
+        }
+
+        #babylonBoardCanvas.hidden {
+            display: none;
         }
 
         #duelBoard {
@@ -1149,6 +1167,8 @@
                             </div>
 
                             <div id="duelStage">
+                                <canvas id="babylonBoardCanvas" class="hidden"></canvas>
+
                                 <div class="card-row player1 hidden" id="player1Container">
                                     <div id="player1Row1" class="card-holder-player1"></div>
                                 </div>
@@ -1165,51 +1185,13 @@
                                     <button type="button" class="phase-btn" id="switchPhaseBtn">Switch</button>
                                 </div>
 
-                                <div class="board board-v2 hidden" id="duelBoard">
-                    <div class="board-column board-column-left">
-                        <div id="coverA" class="board-stack deck-slot"></div>
-                        <div id="graveTop" class="cell board-stack"></div>
-                        <div class="board-stack empty-slot"></div>
-                    </div>
-                    <div class="board-main">
-                        <div class="board-row board-row-top-spell">
-                            <div id="a1" class="cell"></div>
-                            <div id="a2" class="cell"></div>
-                            <div id="a3" class="cell"></div>
-                            <div id="a4" class="cell"></div>
-                            <div id="a5" class="cell"></div>
-                        </div>
-                        <div class="board-row board-row-top-monster">
-                            <div id="b1" class="cell"></div>
-                            <div id="b2" class="cell"></div>
-                            <div id="b3" class="cell"></div>
-                            <div id="b4" class="cell"></div>
-                            <div id="b5" class="cell"></div>
-                        </div>
-                        <div class="board-mid">
-                            <div class="board-mid-slot"></div>
-                            <div class="board-mid-slot"></div>
-                        </div>
-                        <div class="board-row board-row-bottom-monster">
-                            <div id="d1" class="cell"></div>
-                            <div id="d2" class="cell"></div>
-                            <div id="d3" class="cell"></div>
-                            <div id="d4" class="cell"></div>
-                            <div id="d5" class="cell"></div>
-                        </div>
-                        <div class="board-row board-row-bottom-spell">
-                            <div id="c1" class="cell"></div>
-                            <div id="c2" class="cell"></div>
-                            <div id="c3" class="cell"></div>
-                            <div id="c4" class="cell"></div>
-                            <div id="c5" class="cell"></div>
-                        </div>
-                    </div>
-                    <div class="board-column board-column-right">
-                        <div class="board-stack empty-slot"></div>
-                        <div id="graveBottom" class="cell board-stack"></div>
-                        <div id="coverB" class="board-stack deck-slot"></div>
-                    </div>
+                                <div style="display:none" id="duelBoard">
+                                    <div id="a1"></div><div id="a2"></div><div id="a3"></div><div id="a4"></div><div id="a5"></div>
+                                    <div id="b1"></div><div id="b2"></div><div id="b3"></div><div id="b4"></div><div id="b5"></div>
+                                    <div id="c1"></div><div id="c2"></div><div id="c3"></div><div id="c4"></div><div id="c5"></div>
+                                    <div id="d1"></div><div id="d2"></div><div id="d3"></div><div id="d4"></div><div id="d5"></div>
+                                    <div id="graveTop"></div><div id="graveBottom"></div>
+                                    <div id="coverA"></div><div id="coverB"></div>
                                 </div>
 
                                 <div id="lpContainer" class="hidden">
@@ -1255,6 +1237,9 @@
     <script src="./js/viewer-lobby-mode.js"></script>
     <script src="./js/viewer-duel-mode.js"></script>
     <script src="./js/viewer-board-mode.js"></script>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="./js/babylon-board-renderer.js"></script>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const uniqueId = urlParams.get('id');
@@ -1300,6 +1285,9 @@
             document.getElementById('slot2'),
             document.getElementById('slot3'),
         ];
+        const babylonCanvas = document.getElementById('babylonBoardCanvas');
+        let babylonRenderer = null;
+
         const VIEWER_BASE_DUEL_WIDTH = 1360;
         const VIEWER_BASE_DUEL_HEIGHT = 760;
         const VIEWER_BASE_WAITING_WIDTH = 1120;
@@ -1707,6 +1695,9 @@
                 state.perspectiveInitialized = true;
             } else if (!perspectiveSwitching) {
                 duelBoard.style.setProperty('--field-card-angle', `${perspectivePlayer === 0 ? 0 : 180}deg`);
+            }
+            if (babylonRenderer) {
+                babylonRenderer.setPerspective(perspectivePlayer);
             }
         }
 
@@ -2230,6 +2221,32 @@
             return null;
         }
 
+        function initBabylonBoard() {
+            if (!babylonCanvas || !window.BabylonBoardRenderer) return;
+            babylonCanvas.classList.remove('hidden');
+            babylonRenderer = new BabylonBoardRenderer(babylonCanvas, {
+                boardTheme: 'visor-neon',
+                assetRoot: './assets/tablero3d/gltf/',
+                hiddenImageUrl: './Carta/Carta1.png',
+                getCardImageUrl: (cardId) => `/pics/${String(Number(cardId) >>> 0)}.jpg`,
+                decodeCardPosition,
+                getVisibleFieldCellKey,
+            });
+            window.babylonRenderer = babylonRenderer;
+            babylonRenderer.init().then(() => {
+                babylonCanvas.classList.add('hidden');
+            }).catch((err) => {
+                console.warn('[BabylonBoard] init error:', err);
+                babylonCanvas.classList.add('hidden');
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initBabylonBoard);
+        } else {
+            initBabylonBoard();
+        }
+
         function getStateFieldKeyCandidates(controller, location, sequence) {
             const candidates = [];
             const raw = Number(location);
@@ -2575,6 +2592,10 @@
                 }
                 cell.appendChild(node);
             });
+
+            if (babylonRenderer) {
+                babylonRenderer.updateField(state.field || {});
+            }
         }
 
         function renderGraves() {
@@ -2766,7 +2787,8 @@
                 waitingLobby.classList.toggle('hidden', duelStarted);
                 cardPanel.classList.toggle('hidden', !duelStarted);
                 duelWindow.classList.toggle('hidden', !duelStarted);
-                duelBoard.classList.toggle('hidden', !duelStarted);
+                duelBoard.classList.add('hidden');
+                if (babylonCanvas) babylonCanvas.classList.toggle('hidden', !duelStarted);
                 lpContainer.classList.toggle('hidden', !duelStarted);
                 buttonContainer.classList.add('hidden');
                 phaseBar.classList.toggle('hidden', !duelStarted);
