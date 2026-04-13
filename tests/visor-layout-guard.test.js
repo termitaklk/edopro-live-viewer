@@ -65,9 +65,9 @@ function run() {
     expect(/id="lpBarValueLeft"/, 'Missing LP value label inside left LP bar.');
     expect(/id="lpBarValueRight"/, 'Missing LP value label inside right LP bar.');
     expect(/function\s+formatTimeValue\s*\(/, 'Missing formatter for per-player remaining time.');
-    expect(/function\s+getRenderedPlayerOrder\s*\(\)\s*\{[\s\S]*?const perspectivePlayer = getPerspectivePlayer\(\);[\s\S]*?const topPlayerIndex = perspectivePlayer === 0 \? 1 : 0;[\s\S]*?const bottomPlayerIndex = perspectivePlayer;/, 'Missing shared rendered player order helper for perspective-aware HUD/hand mapping.');
+    expect(/function\s+getRenderedPlayerOrder\s*\(\)\s*\{[\s\S]*?const perspectivePlayer = getPerspectivePlayer\(\);[\s\S]*?const topPlayerIndex = perspectivePlayer;[\s\S]*?const bottomPlayerIndex = perspectivePlayer === 0 \? 1 : 0;/, 'Missing shared rendered player order helper for perspective-aware HUD/hand mapping.');
     expect(/getRenderedPlayerOrder,/, 'Board module must receive the shared rendered player order helper.');
-    expect(/payload\.type === 'MSG_NEW_TURN'[\s\S]*?state\.turnPlayer\s*=\s*mappedTurnPlayer;/, 'Turn ownership must be assigned by MSG_NEW_TURN.');
+    expect(/payload\.type === 'MSG_NEW_TURN'[\s\S]*?state\.turnCount\s*=\s*nextTurn;[\s\S]*?state\.turnPlayer\s*=\s*getAuthoritativeTurnPlayer\(\);/, 'Turn ownership must be derived from MSG_NEW_TURN state updates.');
     expectNot(/if\s*\(data\.message === 'time_limit'\)[\s\S]*?state\.turnPlayer\s*=/, 'time_limit must not overwrite turn owner.');
     expect(/#lpContainer\s*\.score-1[\s\S]*?font:\s*700 26px\/1/, 'Turn counter font changed unexpectedly.');
 

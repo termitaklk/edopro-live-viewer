@@ -1469,11 +1469,11 @@
             // Spectators join with a specific "type" (observer slot).
             // Indices in messages are relative to this type. 
             // Absolute = (Relative + Type) % 2
+            // obsType bit 0 encodes which room player went first.
+            // If bit 0 is set (obsType is odd), protocol indices are reversed
+            // relative to room positions, so we must flip.
             const obsType = Number(state.typeChange || 0) & 0x3;
-            if (obsType === 0) {
-                return numeric;
-            }
-            if (obsType === 1) {
+            if (obsType & 0x1) {
                 return 1 - numeric;
             }
 
@@ -1611,8 +1611,10 @@
         }
 
         function getAuthoritativeTurnPlayer() {
-            if (state.turnPlayerFromMessage !== null && state.turnPlayerFromMessage !== undefined) {
-                return Number(state.turnPlayerFromMessage);
+            const startingPlayer = Number(state.startingPlayer);
+            const turnCount = Number(state.turnCount);
+            if (Number.isFinite(startingPlayer) && Number.isFinite(turnCount) && turnCount > 0) {
+                return (startingPlayer + ((turnCount - 1) % 2)) % 2;
             }
             return null;
         }
@@ -1647,10 +1649,10 @@
                 state.debugTurn.lastNewTurnPlayer = lastNewTurnPlayer;
                 state.debugTurn.lastNewTurnCount = newTurnCount;
                 state.turnPlayerFromMessage = lastNewTurnPlayer;
-                state.turnPlayer = lastNewTurnPlayer;
                 if (!Number.isFinite(Number(state.turnCount)) || Number(state.turnCount) <= 0) {
                     state.turnCount = newTurnCount;
                 }
+                state.turnPlayer = getAuthoritativeTurnPlayer();
             }
         }
 
@@ -2192,8 +2194,8 @@
 
         function getRenderedPlayerOrder() {
             const perspectivePlayer = getPerspectivePlayer();
-            const topPlayerIndex = perspectivePlayer === 0 ? 1 : 0;
-            const bottomPlayerIndex = perspectivePlayer;
+            const topPlayerIndex = perspectivePlayer;
+            const bottomPlayerIndex = perspectivePlayer === 0 ? 1 : 0;
             return {
                 perspectivePlayer,
                 topPlayerIndex,
@@ -2771,13 +2773,6 @@
                 player1Container.classList.toggle('hidden', !duelStarted);
                 player2Container.classList.toggle('hidden', !duelStarted);
             }
-            if (
-                duelStarted &&
-                (state.perspectivePlayer === null || state.perspectivePlayer === undefined)
-            ) {
-                state.perspectivePlayer = 0;
-                state.perspectiveInitialized = false;
-            }
             if (!duelStarted) {
                 renderLobby();
             }
@@ -3121,7 +3116,7 @@
                 state.turnPlayerFromSnapshot = null;
                 state.turnPlayerFromMessage = null;
                 state.startingPlayer = null;
-                state.perspectivePlayer = 0;
+                state.perspectivePlayer = null;
                 state.perspectiveInitialized = false;
                 state.turnCount = 0;
                 clearTurnLog('TURN TRACE RESET | Duel started');
@@ -3220,8 +3215,8 @@
                         }
                     }
                     state.turnPlayerFromMessage = mappedTurnPlayer;
-                    state.turnPlayer = mappedTurnPlayer;
                     state.turnCount = nextTurn;
+                    state.turnPlayer = getAuthoritativeTurnPlayer();
                     state.playerTimeUpdatedAt[mappedTurnPlayer] = state.playerTimeUpdatedAt[mappedTurnPlayer] || Date.now();
                 }
 
