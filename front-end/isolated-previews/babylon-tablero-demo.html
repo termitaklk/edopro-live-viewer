@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Babylon Tablero Demo</title>
+    <style>
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #070b12;
+            color: #fff;
+            font-family: "Segoe UI", sans-serif;
+        }
+
+        #app {
+            position: fixed;
+            inset: 0;
+            display: grid;
+            grid-template-columns: 1fr 320px;
+        }
+
+        #renderPane {
+            position: relative;
+            min-width: 0;
+            background:
+                radial-gradient(circle at 20% 20%, rgba(255, 126, 31, 0.18), transparent 28%),
+                radial-gradient(circle at 80% 10%, rgba(255, 230, 128, 0.12), transparent 24%),
+                linear-gradient(180deg, #0b1018, #05070b);
+        }
+
+        #boardCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #sidebar {
+            background: rgba(10, 14, 22, 0.96);
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 18px;
+            overflow: auto;
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 20px;
+        }
+
+        .controls {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        button {
+            appearance: none;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 10px;
+            background: linear-gradient(180deg, #29374f, #141c2a);
+            color: #fff;
+            padding: 10px 12px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        button:hover {
+            filter: brightness(1.08);
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="renderPane">
+            <canvas id="boardCanvas"></canvas>
+        </div>
+        <aside id="sidebar">
+            <h1>Babylon Tablero Demo</h1>
+            <div class="controls">
+                <button id="btnPerspective">Cambiar perspectiva</button>
+                <button id="btnMove">Animar hand -> field</button>
+                <button id="btnFlip">Flip carta top</button>
+                <button id="btnPosition">Ataque / defensa</button>
+                <button id="btnReset">Reset mock</button>
+            </div>
+            <pre id="stateDump"></pre>
+        </aside>
+    </div>
+
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="../js/babylon-board-renderer.js"></script>
+    <script>
+        const state = {
+            perspectivePlayer: 0,
+            field: {
+                "0:4:2": { code: 89631139, controller: 0, location: 0x04, sequence: 2, position: 0x1 },
+                "1:4:1": { code: 46986414, controller: 1, location: 0x04, sequence: 1, position: 0x8 },
+                "1:8:3": { code: 12580477, controller: 1, location: 0x08, sequence: 3, position: 0x5 },
+            },
+        };
+
+        function getCardImageUrl(cardId) {
+            return `/pics/${Number(cardId)}.jpg`;
+        }
+
+        function decodeCardPosition(position) {
+            const raw = Number(position) >>> 0;
+            return {
+                raw,
+                isFaceDown: (raw & 0x0a) !== 0,
+                isDefense: (raw & 0x0c) !== 0,
+                isAttack: (raw & 0x03) !== 0,
+            };
+        }
+
+        function getVisibleFieldCellKey(controller, location, sequence) {
+            const perspectivePlayer = Number(state.perspectivePlayer ?? 0);
+            const isTopSide = Number(controller) !== perspectivePlayer;
+            const seq = Number(sequence);
+            const slot = isTopSide ? 5 - seq : seq + 1;
+
+            if (Number(location) === 0x08 && seq >= 0 && seq <= 4) return `${isTopSide ? "a" : "c"}${slot}`;
+            if (Number(location) === 0x04 && seq >= 0 && seq <= 4) return `${isTopSide ? "b" : "d"}${slot}`;
+            return null;
+        }
+
+        const renderer = new BabylonBoardRenderer(document.getElementById("boardCanvas"), {
+            boardTheme: "visor-neon",
+            showLayoutLabels: true,
+            getCardImageUrl,
+            hiddenImageUrl: "../Carta/Carta1.png",
+            decodeCardPosition,
+            getVisibleFieldCellKey,
+        });
+
+        function dumpState() {
+            document.getElementById("stateDump").textContent = JSON.stringify(state, null, 2);
+        }
+
+        function render() {
+            renderer.setPerspective(state.perspectivePlayer);
+            renderer.updateField(state.field);
+            dumpState();
+        }
+
+        async function main() {
+            await renderer.init();
+            render();
+
+            document.getElementById("btnPerspective").addEventListener("click", () => {
+                state.perspectivePlayer = state.perspectivePlayer === 0 ? 1 : 0;
+                render();
+            });
+
+            document.getElementById("btnMove").addEventListener("click", async () => {
+                state.field["0:4:4"] = { code: 74677422, controller: 0, location: 0x04, sequence: 4, position: 0x1 };
+                render();
+                await renderer.animateMove({
+                    cellId: getVisibleFieldCellKey(0, 0x04, 4),
+                    fromTop: false,
+                });
+            });
+
+            document.getElementById("btnFlip").addEventListener("click", async () => {
+                const key = "1:4:1";
+                const card = state.field[key];
+                card.position = card.position === 0x8 ? 0x1 : 0x8;
+                render();
+                await renderer.animateFlip(getVisibleFieldCellKey(card.controller, card.location, card.sequence), decodeCardPosition(card.position).isFaceDown);
+            });
+
+            document.getElementById("btnPosition").addEventListener("click", async () => {
+                const key = "0:4:2";
+                const card = state.field[key];
+                card.position = card.position === 0x1 ? 0x4 : 0x1;
+                render();
+                await renderer.animatePosition(getVisibleFieldCellKey(card.controller, card.location, card.sequence), decodeCardPosition(card.position).isDefense);
+            });
+
+            document.getElementById("btnReset").addEventListener("click", () => {
+                state.perspectivePlayer = 0;
+                state.field = {
+                    "0:4:2": { code: 89631139, controller: 0, location: 0x04, sequence: 2, position: 0x1 },
+                    "1:4:1": { code: 46986414, controller: 1, location: 0x04, sequence: 1, position: 0x8 },
+                    "1:8:3": { code: 12580477, controller: 1, location: 0x08, sequence: 3, position: 0x5 },
+                };
+                render();
+            });
+        }
+
+        main().catch((error) => {
+            document.getElementById("stateDump").textContent = String(error?.stack || error);
+        });
+    </script>
+</body>
+</html>
