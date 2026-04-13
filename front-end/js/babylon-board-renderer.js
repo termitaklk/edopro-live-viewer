@@ -264,11 +264,12 @@
                 slot.parent = this.boardRoot;
                 slot.position.set(x, 0.16, 0);
                 slot.material = this.makeStandardMaterial(`mid-slot-mat-${index}`, {
-                    diffuse: [0.1, 0.03, 0.16],
-                    emissive: [0.5, 0.14, 0.82],
+                    diffuse: [0.28, 0.08, 0.48],
+                    emissive: [0.18, 0.05, 0.30],
                     alpha: 0.82,
                     specular: [0, 0, 0],
                 });
+                this.glowLayer.addExcludedMesh(slot);
 
                 this.createFrameOutline(`mid-slot-outline-${index}`, 1.28, 1.48, 0.03, new BABYLON.Color3(0.74, 0.34, 1.0), 0.2, x, 0, 1.35);
             });
@@ -276,16 +277,16 @@
 
         createSideStacksExample() {
             const stackConfigs = [
-                { id: "left-top-1", x: -4.34, z: -4.65, color: [1.0, 0.84, 0.32] },
-                { id: "left-top-2", x: -4.34, z: -3.25, color: [1.0, 0.84, 0.32] },
-                { id: "left-top-3", x: -4.34, z: -1.85, color: [1.0, 0.84, 0.32] },
-                { id: "left-bottom-1", x: -4.34, z: 2.85, color: [1.0, 0.84, 0.32] },
-                { id: "left-bottom-2", x: -4.34, z: 4.25, color: [1.0, 0.84, 0.32] },
-                { id: "right-top-1", x: 4.34, z: -4.15, color: [0.35, 1.0, 0.49] },
-                { id: "right-top-2", x: 4.34, z: -2.75, color: [0.35, 1.0, 0.49] },
-                { id: "right-bottom-1", x: 4.34, z: 1.95, color: [0.35, 1.0, 0.49] },
-                { id: "right-bottom-2", x: 4.34, z: 3.35, color: [0.35, 1.0, 0.49] },
-                { id: "right-bottom-3", x: 4.34, z: 4.75, color: [0.35, 1.0, 0.49] },
+                { id: "left-top-1", x: -4.34, z: 4.20, color: [1.0, 0.84, 0.32] },
+                { id: "left-top-2", x: -4.34, z: 2.80, color: [1.0, 0.84, 0.32] },
+                { id: "left-top-3", x: -4.34, z: 1.40, color: [1.0, 0.84, 0.32] },
+                { id: "left-bottom-1", x: -4.34, z: -2.80, color: [1.0, 0.84, 0.32] },
+                { id: "left-bottom-2", x: -4.34, z: -4.20, color: [1.0, 0.84, 0.32] },
+                { id: "right-top-1", x: 4.34, z: 4.20, color: [0.35, 1.0, 0.49] },
+                { id: "right-top-2", x: 4.34, z: 2.80, color: [0.35, 1.0, 0.49] },
+                { id: "right-bottom-1", x: 4.34, z: -1.40, color: [0.35, 1.0, 0.49] },
+                { id: "right-bottom-2", x: 4.34, z: -2.80, color: [0.35, 1.0, 0.49] },
+                { id: "right-bottom-3", x: 4.34, z: -4.20, color: [0.35, 1.0, 0.49] },
             ];
 
             stackConfigs.forEach((stack) => {
@@ -300,7 +301,7 @@
                 height: 0.03,
             }, this.scene);
             fill.parent = this.boardRoot;
-            fill.position.set(x, 0.16, z);
+            fill.position.set(x, 0.18, z);
             fill.material = this.makeStandardMaterial(`side-fill-mat-${id}`, {
                 diffuse: [0.02, 0.03, 0.05],
                 emissive: [color.r * 0.3, color.g * 0.3, color.b * 0.3],
@@ -308,7 +309,7 @@
                 specular: [0, 0, 0],
             });
 
-            this.createFrameOutline(`side-outline-${id}`, 0.78, 1.18, 0.028, color, 0.18, x, z, 1.5);
+            this.createFrameOutline(`side-outline-${id}`, 0.78, 1.18, 0.028, color, 0.22, x, z, 1.5);
         }
 
         createLayoutLabels() {
