@@ -771,6 +771,7 @@
             z-index: 5;
             display: block;
             border-radius: 12px;
+            background: transparent;
         }
 
         #babylonBoardCanvas.hidden {
@@ -2207,11 +2208,11 @@
             const slot = isTopSide ? 5 - seq : seq + 1;
 
             if (normalizedLocation === 0x08 && seq >= 0 && seq <= 4) {
-                return `${isTopSide ? 'a' : 'c'}${slot}`;
+                return `${isTopSide ? 'b' : 'd'}${slot}`;
             }
 
             if (normalizedLocation === 0x04 && seq >= 0 && seq <= 4) {
-                return `${isTopSide ? 'b' : 'd'}${slot}`;
+                return `${isTopSide ? 'a' : 'c'}${slot}`;
             }
 
             if (normalizedLocation === 0x10) {

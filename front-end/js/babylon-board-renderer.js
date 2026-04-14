@@ -28,9 +28,10 @@
                 preserveDrawingBuffer: true,
                 stencil: true,
                 antialias: true,
+                premultipliedAlpha: false,
             });
             this.scene = new BABYLON.Scene(this.engine);
-            this.scene.clearColor = new BABYLON.Color4(0.015, 0.025, 0.06, 1);
+            this.scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
             this.scene.ambientColor = new BABYLON.Color3(0.16, 0.16, 0.2);
 
             this.camera = new BABYLON.ArcRotateCamera(
@@ -139,74 +140,64 @@
         }
 
         buildVisorBoardEnvironment() {
-            const background = BABYLON.MeshBuilder.CreateGround("board-background", {
-                width: 34,
-                height: 24,
-            }, this.scene);
-            background.parent = this.boardRoot;
-            background.position.y = -0.2;
-            background.material = this.makeStandardMaterial("background", {
-                diffuse: [0.03, 0.04, 0.08],
-                emissive: [0.025, 0.03, 0.08],
-                specular: [0, 0, 0],
-            });
-
             const halo = BABYLON.MeshBuilder.CreateGround("board-halo", {
-                width: 22,
-                height: 15,
+                width: 12,
+                height: 11,
             }, this.scene);
             halo.parent = this.boardRoot;
             halo.position.y = -0.12;
             halo.material = this.makeStandardMaterial("board-halo-mat", {
                 diffuse: [0, 0, 0],
-                emissive: [0.06, 0.12, 0.2],
-                alpha: 0.16,
+                emissive: [0.04, 0.06, 0.14],
+                alpha: 0.28,
                 specular: [0, 0, 0],
             });
 
             const outer = BABYLON.MeshBuilder.CreateBox("board-outer", {
-                width: 15.4,
+                width: 10.6,
                 depth: 10.4,
                 height: 0.36,
             }, this.scene);
             outer.parent = this.boardRoot;
             outer.position.y = 0;
             outer.material = this.makeStandardMaterial("outer", {
-                diffuse: [0.045, 0.055, 0.1],
-                emissive: [0.015, 0.04, 0.05],
+                diffuse: [0.02, 0.015, 0.04],
+                emissive: [0.01, 0.008, 0.022],
+                alpha: 0.82,
                 specular: [0, 0, 0],
             });
 
             const inner = BABYLON.MeshBuilder.CreateBox("board-inner", {
-                width: 14.7,
+                width: 9.9,
                 depth: 9.8,
                 height: 0.08,
             }, this.scene);
             inner.parent = this.boardRoot;
             inner.position.y = 0.15;
             inner.material = this.makeStandardMaterial("inner", {
-                diffuse: [0.02, 0.03, 0.07],
-                emissive: [0.015, 0.025, 0.045],
+                diffuse: [0.015, 0.01, 0.035],
+                emissive: [0.008, 0.006, 0.025],
+                alpha: 0.78,
                 specular: [0, 0, 0],
             });
 
             const glass = BABYLON.MeshBuilder.CreateBox("board-glass", {
-                width: 14.55,
+                width: 9.75,
                 depth: 9.65,
                 height: 0.02,
             }, this.scene);
             glass.parent = this.boardRoot;
             glass.position.y = 0.21;
             glass.material = this.makeStandardMaterial("glass", {
-                diffuse: [0.02, 0.04, 0.08],
-                emissive: [0.02, 0.05, 0.08],
-                alpha: 0.18,
-                specular: [0.12, 0.12, 0.14],
+                diffuse: [0.03, 0.02, 0.08],
+                emissive: [0.015, 0.01, 0.05],
+                alpha: 0.12,
+                specular: [0.08, 0.06, 0.14],
             });
 
-            this.createFrameOutline("board-outline", 14.9, 10.0, 0.11, new BABYLON.Color3(0.17, 0.89, 0.91), 0.11, 0, 0, 0.55);
-            this.createMainPanel("top-panel", 0, -2.6, 8.2, 3.15, new BABYLON.Color3(0.24, 0.33, 1.0), new BABYLON.Color3(0.03, 0.04, 0.09));
-            this.createMainPanel("bottom-panel", 0, 2.6, 8.2, 3.15, new BABYLON.Color3(1.0, 0.28, 0.32), new BABYLON.Color3(0.09, 0.03, 0.04));
+            this.createFrameOutline("board-outline", 10.1, 10.0, 0.11, new BABYLON.Color3(0.17, 0.89, 0.91), 0.11, 0, 0, 0.55);
+            this.createMainPanel("top-panel", 0, -2.6, 7.8, 3.15, new BABYLON.Color3(0.24, 0.33, 1.0), new BABYLON.Color3(0.03, 0.04, 0.09));
+            this.createMainPanel("bottom-panel", 0, 2.6, 7.8, 3.15, new BABYLON.Color3(1.0, 0.28, 0.32), new BABYLON.Color3(0.09, 0.03, 0.04));
             this.createPanelMarkers();
             this.createZoneGuides();
             this.createMidSlots();
@@ -219,7 +210,7 @@
 
         createBoardAtmosphere() {
             const topGlow = BABYLON.MeshBuilder.CreateGround("top-glow", {
-                width: 12,
+                width: 9,
                 height: 4.6,
             }, this.scene);
             topGlow.parent = this.boardRoot;
@@ -236,7 +227,7 @@
             });
 
             const bottomGlow = BABYLON.MeshBuilder.CreateGround("bottom-glow", {
-                width: 12,
+                width: 9,
                 height: 4.6,
             }, this.scene);
             bottomGlow.parent = this.boardRoot;
@@ -383,10 +374,10 @@
 
             ["a", "b", "c", "d"].forEach((rowKey) => {
                 const isTop = rowKey === "a" || rowKey === "b";
-                const edge = (rowKey === "b" || rowKey === "c")
+                const edge = (rowKey === "a" || rowKey === "c")
                     ? (isTop ? new BABYLON.Color3(0.35, 0.44, 1.0) : new BABYLON.Color3(1.0, 0.31, 0.34))
                     : new BABYLON.Color3(0.72, 0.72, 0.8);
-                const fill = (rowKey === "b" || rowKey === "c")
+                const fill = (rowKey === "a" || rowKey === "c")
                     ? (isTop ? new BABYLON.Color3(0.05, 0.08, 0.16) : new BABYLON.Color3(0.16, 0.05, 0.06))
                     : new BABYLON.Color3(0.03, 0.03, 0.05);
 
@@ -579,7 +570,7 @@
 
                     const mat = new BABYLON.StandardMaterial(`zone-mat-${id}`, this.scene);
                     const isTop = rowKey === "a" || rowKey === "b";
-                    const isMonster = rowKey === "b" || rowKey === "c";
+                    const isMonster = rowKey === "a" || rowKey === "c";
                     mat.diffuseColor = isMonster
                         ? (isTop ? new BABYLON.Color3(0.28, 0.4, 0.95) : new BABYLON.Color3(0.95, 0.24, 0.28))
                         : new BABYLON.Color3(0.2, 0.2, 0.28);
@@ -599,9 +590,23 @@
             }
 
             const mat = new BABYLON.StandardMaterial(`card-mat-${this.materialCache.size}`, this.scene);
-            mat.diffuseTexture = new BABYLON.Texture(textureUrl, this.scene, true, false);
             mat.specularColor = BABYLON.Color3.Black();
-            mat.emissiveColor = new BABYLON.Color3(0.17, 0.17, 0.17);
+            mat.emissiveColor = new BABYLON.Color3(0.04, 0.04, 0.04);
+
+            const loadTex = (url) => new BABYLON.Texture(
+                url, this.scene, false, true,
+                BABYLON.Texture.TRILINEAR_SAMPLINGMODE,
+                null,
+                () => {
+                    const cardId = url.split('/').pop().replace('.jpg', '');
+                    const fallback = `https://images.ygoprodeck.com/images/cards/${cardId}.jpg`;
+                    if (url !== fallback) {
+                        mat.diffuseTexture = loadTex(fallback);
+                    }
+                }
+            );
+
+            mat.diffuseTexture = loadTex(textureUrl);
             this.materialCache.set(textureUrl, mat);
             return mat;
         }
