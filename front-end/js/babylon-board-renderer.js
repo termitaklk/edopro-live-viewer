@@ -599,7 +599,7 @@
                 null,
                 () => {
                     const cardId = url.split('/').pop().replace('.jpg', '');
-                    const fallback = `https://images.ygoprodeck.com/images/cards/${cardId}.jpg`;
+                    const fallback = `/pics/${cardId}.jpg`;
                     if (url !== fallback) {
                         mat.diffuseTexture = loadTex(fallback);
                     }
