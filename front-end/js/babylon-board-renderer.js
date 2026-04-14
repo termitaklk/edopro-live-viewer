@@ -595,7 +595,16 @@
 
             mat.diffuseTexture = new BABYLON.Texture(
                 textureUrl, this.scene, false, true,
-                BABYLON.Texture.TRILINEAR_SAMPLINGMODE
+                BABYLON.Texture.TRILINEAR_SAMPLINGMODE,
+                null,
+                () => {
+                    if (textureUrl !== this.options.hiddenImageUrl) {
+                        mat.diffuseTexture = new BABYLON.Texture(
+                            this.options.hiddenImageUrl, this.scene, false, true,
+                            BABYLON.Texture.TRILINEAR_SAMPLINGMODE
+                        );
+                    }
+                }
             );
             this.materialCache.set(textureUrl, mat);
             return mat;

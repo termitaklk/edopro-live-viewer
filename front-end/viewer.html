@@ -3308,14 +3308,14 @@
 
                 if (payload.type === 'MSG_SHUFFLE_HAND' && payload.player !== null) {
                     const mappedPlayer = mapProtocolPlayer(payload.player);
-                    const current = Array.isArray(state.hands[mappedPlayer]) ? [...state.hands[player]] : [];
+                    const current = Array.isArray(state.hands[mappedPlayer]) ? [...state.hands[mappedPlayer]] : [];
                     for (let index = current.length - 1; index > 0; index -= 1) {
                         const randomIndex = Math.floor(Math.random() * (index + 1));
                         [current[index], current[randomIndex]] = [current[randomIndex], current[index]];
                     }
                     state.hands[mappedPlayer] = current;
-                    setCardDebug(`shuffle_hand | player=${player} | cards=${current.length} | hex=${payload.payloadHex || '-'}`);
-                    appendLog(`HAND SHUFFLE DETECTED | player=${player} | cards=${current.length} | hex=${payload.payloadHex || '-'}`);
+                    setCardDebug(`shuffle_hand | player=${mappedPlayer} | cards=${current.length} | hex=${payload.payloadHex || '-'}`);
+                    appendLog(`HAND SHUFFLE DETECTED | player=${mappedPlayer} | cards=${current.length} | hex=${payload.payloadHex || '-'}`);
                     renderState();
                     animateHandShuffle(mappedPlayer);
                     handledImmediateRender = true;
