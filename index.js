@@ -46,6 +46,44 @@ async function fetchRoomApiJson(serverBase) {
     }
 }
 
+app.get('/api/card-image/:id', async (req, res) => {
+    const cardId = Number(req.params.id);
+    if (!Number.isFinite(cardId) || cardId <= 0) {
+        res.status(400).end();
+        return;
+    }
+
+    const localPath = path.join(__dirname, 'pics', `${cardId}.jpg`);
+    const fs = require('fs');
+    if (fs.existsSync(localPath)) {
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        fs.createReadStream(localPath).pipe(res);
+        return;
+    }
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const upstream = await fetch(`https://images.ygoprodeck.com/images/cards/${cardId}.jpg`, {
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (!upstream.ok) {
+            res.status(upstream.status).end();
+            return;
+        }
+
+        res.setHeader('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        const buf = Buffer.from(await upstream.arrayBuffer());
+        res.end(buf);
+    } catch {
+        res.status(502).end();
+    }
+});
+
 app.get('/api/card/:id', (req, res) => {
     const cardId = Number(req.params.id);
     if (!Number.isFinite(cardId) || cardId <= 0) {

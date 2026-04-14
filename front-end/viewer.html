@@ -2229,7 +2229,7 @@
                 boardTheme: 'visor-neon',
                 assetRoot: './assets/tablero3d/gltf/',
                 hiddenImageUrl: './Carta/Carta1.png',
-                getCardImageUrl: (cardId) => `https://images.ygoprodeck.com/images/cards/${String(Number(cardId) >>> 0)}.jpg`,
+                getCardImageUrl: (cardId) => `/api/card-image/${String(Number(cardId) >>> 0)}`,
                 decodeCardPosition,
                 getVisibleFieldCellKey,
             });

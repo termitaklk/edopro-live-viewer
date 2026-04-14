@@ -593,20 +593,10 @@
             mat.specularColor = BABYLON.Color3.Black();
             mat.emissiveColor = new BABYLON.Color3(0.04, 0.04, 0.04);
 
-            const loadTex = (url) => new BABYLON.Texture(
-                url, this.scene, false, true,
-                BABYLON.Texture.TRILINEAR_SAMPLINGMODE,
-                null,
-                () => {
-                    const cardId = url.split('/').pop().replace('.jpg', '');
-                    const fallback = `/pics/${cardId}.jpg`;
-                    if (url !== fallback) {
-                        mat.diffuseTexture = loadTex(fallback);
-                    }
-                }
+            mat.diffuseTexture = new BABYLON.Texture(
+                textureUrl, this.scene, false, true,
+                BABYLON.Texture.TRILINEAR_SAMPLINGMODE
             );
-
-            mat.diffuseTexture = loadTex(textureUrl);
             this.materialCache.set(textureUrl, mat);
             return mat;
         }
