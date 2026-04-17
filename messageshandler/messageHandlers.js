@@ -503,6 +503,33 @@ function parseUpdateCardPayload(payload) {
     };
 }
 
+function parsePosChangePayload(payload) {
+    if (!payload || payload.length < 9) {
+        return null;
+    }
+
+    const reader = createReader(payload);
+    const code = reader.readUInt32LE();
+    const controller = reader.readUInt8();
+    const location = reader.readUInt8();
+    const sequence = reader.readUInt8();
+    const previousPosition = reader.readUInt8();
+    const currentPosition = reader.readUInt8();
+
+    if ([code, controller, location, sequence, previousPosition, currentPosition].some((v) => v === null || v === undefined)) {
+        return null;
+    }
+
+    return {
+        code,
+        controller,
+        location,
+        sequence,
+        previousPosition,
+        currentPosition,
+    };
+}
+
 function parseUpdateDataPayload(payload) {
     if (!payload || payload.length < 6) {
         return null;
@@ -923,7 +950,8 @@ function handleGameMessage(segment, context = {}) {
                     roomId: context.roomId,
                     type: 'MSG_START',
                     rawType: gameMessageType,
-                    ...(start || { payloadHex: payload.toString('hex') }),
+                    payloadHex: payload.toString('hex'),
+                    ...(start || {}),
                     clientFlow: context.clientFlow,
                 });
                 }
@@ -934,6 +962,7 @@ function handleGameMessage(segment, context = {}) {
                     roomId: context.roomId,
                     type: 'MSG_NEW_TURN',
                     rawType: gameMessageType,
+                    payloadHex: payload.toString('hex'),
                     player: payload.length > 0 ? payload.readUInt8(0) : null,
                     clientFlow: context.clientFlow,
                 });
@@ -944,6 +973,7 @@ function handleGameMessage(segment, context = {}) {
                     roomId: context.roomId,
                     type: 'MSG_NEW_PHASE',
                     rawType: gameMessageType,
+                    payloadHex: payload.toString('hex'),
                     phase: payload.length >= 2 ? payload.readUInt16LE(0) : null,
                     clientFlow: context.clientFlow,
                 });
@@ -956,7 +986,8 @@ function handleGameMessage(segment, context = {}) {
                     roomId: context.roomId,
                     type: 'MSG_DRAW',
                     rawType: gameMessageType,
-                    ...(draw || { payloadHex: payload.toString('hex') }),
+                    payloadHex: payload.toString('hex'),
+                    ...(draw || {}),
                     clientFlow: context.clientFlow,
                 });
                 }
@@ -980,6 +1011,7 @@ function handleGameMessage(segment, context = {}) {
                     roomId: context.roomId,
                     type: 'MSG_DAMAGE',
                     rawType: gameMessageType,
+                    payloadHex: payload.toString('hex'),
                     player: payload.length > 0 ? payload.readUInt8(0) : null,
                     amount: payload.length >= 5 ? payload.readUInt32LE(1) : null,
                     clientFlow: context.clientFlow,
@@ -991,6 +1023,7 @@ function handleGameMessage(segment, context = {}) {
                     roomId: context.roomId,
                     type: 'MSG_RECOVER',
                     rawType: gameMessageType,
+                    payloadHex: payload.toString('hex'),
                     player: payload.length > 0 ? payload.readUInt8(0) : null,
                     amount: payload.length >= 5 ? payload.readUInt32LE(1) : null,
                     clientFlow: context.clientFlow,
@@ -1002,6 +1035,7 @@ function handleGameMessage(segment, context = {}) {
                     roomId: context.roomId,
                     type: 'MSG_LPUPDATE',
                     rawType: gameMessageType,
+                    payloadHex: payload.toString('hex'),
                     player: payload.length > 0 ? payload.readUInt8(0) : null,
                     lp: payload.length >= 5 ? payload.readUInt32LE(1) : null,
                     clientFlow: context.clientFlow,
@@ -1028,7 +1062,8 @@ function handleGameMessage(segment, context = {}) {
                     roomId: context.roomId,
                     type: 'MSG_MOVE',
                     rawType: gameMessageType,
-                    ...(move || { payloadHex: payload.toString('hex') }),
+                    payloadHex: payload.toString('hex'),
+                    ...(move || {}),
                     clientFlow: context.clientFlow,
                 });
                 }
@@ -1041,7 +1076,8 @@ function handleGameMessage(segment, context = {}) {
                         roomId: context.roomId,
                         type: 'MSG_UPDATE_CARD',
                         rawType: gameMessageType,
-                        ...(update || { payloadHex: payload.toString('hex') }),
+                        payloadHex: payload.toString('hex'),
+                        ...(update || {}),
                         clientFlow: context.clientFlow,
                     });
                 }
@@ -1054,7 +1090,8 @@ function handleGameMessage(segment, context = {}) {
                         roomId: context.roomId,
                         type: 'MSG_UPDATE_DATA',
                         rawType: gameMessageType,
-                        ...(update || { payloadHex: payload.toString('hex') }),
+                        payloadHex: payload.toString('hex'),
+                        ...(update || {}),
                         clientFlow: context.clientFlow,
                     });
                 }
@@ -1066,6 +1103,19 @@ function handleGameMessage(segment, context = {}) {
                     emit(context.uniqueId, 'reload_field', {
                         roomId: context.roomId,
                         ...(reload || { payloadHex: payload.toString('hex') }),
+                        clientFlow: context.clientFlow,
+                    });
+                }
+                break;
+
+            case COMMON_MSG.MSG_POS_CHANGE:
+                {
+                    const posChange = parsePosChangePayload(payload);
+                    emit(context.uniqueId, 'game_msg', {
+                        roomId: context.roomId,
+                        type: 'MSG_POS_CHANGE',
+                        rawType: gameMessageType,
+                        ...(posChange || { payloadHex: payload.toString('hex') }),
                         clientFlow: context.clientFlow,
                     });
                 }

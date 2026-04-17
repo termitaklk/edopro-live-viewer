@@ -137,6 +137,10 @@
             display: none;
         }
 
+        #downloadLogsButton.hidden {
+            display: none !important;
+        }
+
         #duelWindowBody {
             position: relative;
             width: 100%;
@@ -920,6 +924,11 @@
             border-color: rgba(90, 255, 124, 0.9);
         }
 
+        #duelBoard.board-v2 #banishedTop,
+        #duelBoard.board-v2 #banishedBottom {
+            border-color: rgba(197, 142, 255, 0.9);
+        }
+
         /* SUCCESS REFERENCE (LP HUD): centered lane, aligned with hands and board */
         #lpContainer {
             position: absolute !important;
@@ -1092,6 +1101,32 @@
         #duelWindow.hidden {
             display: none !important;
         }
+
+        .hex-byte {
+            display: inline-block;
+            padding: 1px 3px;
+            margin: 1px;
+            border-radius: 2px;
+            cursor: default;
+            color: #c2bed3;
+            background: #0d111c;
+            border: 1px solid #1a1f2e;
+            transition: background 0.1s;
+        }
+        .hex-byte.header-byte {
+            color: #ffd43b;
+            border-color: #3a3010;
+            background: #1a1600;
+        }
+        .hex-byte.hl {
+            background: rgba(22, 199, 132, 0.25);
+            border-color: #16c784;
+            color: #fff;
+        }
+        #fieldsTable tr.hl-row td {
+            background: rgba(22, 199, 132, 0.15);
+            color: #fff;
+        }
     </style>
 </head>
 
@@ -1192,6 +1227,7 @@
                                     <div id="c1"></div><div id="c2"></div><div id="c3"></div><div id="c4"></div><div id="c5"></div>
                                     <div id="d1"></div><div id="d2"></div><div id="d3"></div><div id="d4"></div><div id="d5"></div>
                                     <div id="graveTop"></div><div id="graveBottom"></div>
+                                    <div id="banishedTop"></div><div id="banishedBottom"></div>
                                     <div id="coverA"></div><div id="coverB"></div>
                                 </div>
 
@@ -1220,10 +1256,59 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Panel de inspección hex dual (solo visible en modo replay) -->
+                    <div id="hexInspectorContainer" class="hidden" style="
+                        position: absolute; bottom: 0; left: 0; right: 0;
+                        height: 220px; background: rgba(8,10,16,0.97);
+                        border-top: 1px solid #2f3945; border-radius: 0 0 14px 14px;
+                        z-index: 9990; display: flex; flex-direction: column; overflow: hidden;">
+                        <div id="hexInspectorHeader" style="
+                            display: flex; align-items: center; justify-content: space-between;
+                            padding: 6px 12px; background: #0d111c; border-bottom: 1px solid #2f3945;
+                            flex-shrink: 0;">
+                            <span id="hexInspectorTitle" style="color:#16c784;font-family:monospace;font-size:12px;">
+                                Inspector Hex
+                            </span>
+                            <button id="hexInspectorClose" style="
+                                background:none; border:none; color:#666; cursor:pointer;
+                                font-size:14px; padding:0 4px;">✕</button>
+                        </div>
+                        <div style="display:flex;flex:1;overflow:hidden;gap:0;">
+                            <div id="hexViewerPane" style="
+                                flex:1; overflow-y:auto; padding:8px;
+                                font-family:monospace; font-size:11px;
+                                border-right:1px solid #2f3945; word-break:break-all; line-height:1.8;">
+                            </div>
+                            <div id="fieldsTablePane" style="flex:1;overflow-y:auto;padding:8px;">
+                                <table id="fieldsTable" style="
+                                    width:100%;border-collapse:collapse;
+                                    font-family:monospace;font-size:11px;">
+                                    <thead>
+                                        <tr style="color:#16c784;border-bottom:1px solid #2f3945;">
+                                            <th style="text-align:left;padding:2px 6px;">Campo</th>
+                                            <th style="text-align:left;padding:2px 6px;">Valor</th>
+                                            <th style="text-align:left;padding:2px 6px;">Offset</th>
+                                            <th style="text-align:left;padding:2px 6px;">Bytes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="fieldsTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="livePanel">
                     <h3>Live Duel State</h3>
+                    <button id="hexInspectorToggle" class="hidden" style="
+                        width:100%;padding:8px;margin-bottom:6px;
+                        background:#0d111c;border:1px solid #2f3945;
+                        color:#16c784;cursor:pointer;border-radius:4px;
+                        font-family:monospace;font-size:11px;">
+                        🔍 Inspeccionar Hex
+                    </button>
+                    <button id="downloadLogsButton" style="width: 100%; padding: 10px; margin-bottom: 10px; background: linear-gradient(135deg, #1a1a2e, #16c784); border: 2px solid #16c784; color: #fff; cursor: pointer; border-radius: 6px; font-size: 12px; font-weight: bold; box-shadow: 0 0 10px rgba(22, 199, 132, 0.5); transition: all 0.3s;">📥 Descargar Logs</button>
                     <div id="liveMeta" class="meta">Waiting for events...</div>
                     <div id="lastCardId">Last valid card id: none</div>
                     <div id="lastImagePath">Last image path: none</div>
@@ -1363,13 +1448,72 @@
             },
             hands: { 0: [], 1: [] },
             field: {},
+            fieldUpdateSnapshots: {},
+            handSnapshots: { 0: { count: 0 }, 1: { count: 0 } },
+            graveSnapshots: { 0: [], 1: [] },
+            banishedSnapshots: { 0: [], 1: [] },
             graves: { 0: [], 1: [] },
+            banished: { 0: [], 1: [] },
             highlightCell: null,
             pendingReveal: null,
             battlePhaseSeen: false,
             perspectivePlayer: null,
             perspectiveInitialized: false,
         };
+
+        // ========== SISTEMA DE REPLAY MODE ==========
+        let replayModeActive = false;
+        let replayData = null;
+        let replayCurrentIndex = 0;
+
+        // Detectar si estamos en modo replay leyendo localStorage
+        const duelReplayDataStr = localStorage.getItem('duelReplayData');
+        const duelReplayModeStr = localStorage.getItem('duelReplayMode');
+
+        if (duelReplayModeStr === 'true' && duelReplayDataStr) {
+            try {
+                replayData = JSON.parse(duelReplayDataStr);
+                replayModeActive = true;
+
+                // Inicializar estado base para replay
+                state.field = {};
+                state.graves = [[], []];
+                state.banished = [[], []];
+                state.hands = [[], []];
+                state.decks = [0, 0];
+                state.lpValues = [8000, 8000];
+                state.clientFlow = 'edopro';
+                state.perspectivePlayer = 0; // Jugador inferior por defecto
+                state.players = [];
+                state.room = null;
+                state.spectators = 0;
+                state.phase = 'dueling';
+
+                // Cargar el estado inicial si existe
+                if (replayData.initialState && Object.keys(replayData.initialState).length > 0) {
+                    Object.assign(state, replayData.initialState);
+                    console.log('Loaded replay initialState:', replayData.initialState);
+                }
+
+                duelStarted = true;
+                state.phase = 'dueling';
+                currentDuelUniqueId = 'replay-mode';
+
+                console.log('✅ Modo replay activado con', replayData.messages.length, 'mensajes');
+                console.log('Estado inicial:', JSON.stringify(state, null, 2).substring(0, 500));
+
+                // Usar setTimeout para asegurar que todo está inicializado antes de renderizar
+                setTimeout(() => {
+                    console.log('Renderizando estado inicial de replay...');
+                    renderState();
+                    console.log('Estado inicial renderizado');
+                }, 100);
+            } catch (err) {
+                console.error('Error cargando replay data:', err);
+                replayModeActive = false;
+            }
+        }
+
         const seenSessionEvents = new Set();
         const loggedAssetKeys = new Set();
         const fieldImageCache = new Map();
@@ -1382,6 +1526,101 @@
         let lastLoadedCardId = null;
         let perspectiveSwitching = false;
         let graveCardSizeMode = 'compact';
+
+        // Esquemas de payloads para inspección hex dual
+        const PAYLOAD_SCHEMAS = {
+            MSG_START: [
+                { name: 'playerType', start: 0, length: 1, type: 'UInt8' },
+                { name: 'lp0',        start: 1, length: 4, type: 'UInt32LE' },
+                { name: 'lp1',        start: 5, length: 4, type: 'UInt32LE' },
+                { name: 'deck0',      start: 9, length: 2, type: 'UInt16LE' },
+                { name: 'extra0',     start:11, length: 2, type: 'UInt16LE' },
+                { name: 'deck1',      start:13, length: 2, type: 'UInt16LE' },
+                { name: 'extra1',     start:15, length: 2, type: 'UInt16LE' },
+            ],
+            MSG_NEW_TURN: [
+                { name: 'player', start: 0, length: 1, type: 'UInt8' },
+            ],
+            MSG_NEW_PHASE: [
+                { name: 'phase', start: 0, length: 2, type: 'UInt16LE' },
+            ],
+            MSG_DRAW: [
+                { name: 'player', start: 0, length: 1, type: 'UInt8' },
+                { name: 'count',  start: 1, length: 4, type: 'UInt32LE' },
+            ],
+            MSG_MOVE: [
+                { name: 'code',               start: 0,  length: 4, type: 'UInt32LE' },
+                { name: 'previousController', start: 4,  length: 1, type: 'UInt8' },
+                { name: 'previousLocation',   start: 5,  length: 1, type: 'UInt8' },
+                { name: 'previousSequence',   start: 6,  length: 1, type: 'UInt8' },
+                { name: 'previousPosition',   start: 7,  length: 1, type: 'UInt8' },
+                { name: 'currentController',  start: 8,  length: 1, type: 'UInt8' },
+                { name: 'currentLocation',    start: 9,  length: 1, type: 'UInt8' },
+                { name: 'currentSequence',    start: 10, length: 1, type: 'UInt8' },
+                { name: 'currentPosition',    start: 11, length: 1, type: 'UInt8' },
+                { name: 'reason',             start: 12, length: 4, type: 'UInt32LE' },
+            ],
+            MSG_UPDATE_DATA: [
+                { name: 'player',    start: 0, length: 1, type: 'UInt8' },
+                { name: 'location',  start: 1, length: 1, type: 'UInt8' },
+                { name: 'totalSize', start: 2, length: 4, type: 'UInt32LE' },
+            ],
+            MSG_DAMAGE: [
+                { name: 'player', start: 0, length: 1, type: 'UInt8' },
+                { name: 'amount', start: 1, length: 4, type: 'UInt32LE' },
+            ],
+            MSG_RECOVER: [
+                { name: 'player', start: 0, length: 1, type: 'UInt8' },
+                { name: 'amount', start: 1, length: 4, type: 'UInt32LE' },
+            ],
+            MSG_LPUPDATE: [
+                { name: 'player', start: 0, length: 1, type: 'UInt8' },
+                { name: 'new_lp', start: 1, length: 4, type: 'UInt32LE' },
+            ],
+            MSG_WIN: [
+                { name: 'player', start: 0, length: 1, type: 'UInt8' },
+                { name: 'type',   start: 1, length: 1, type: 'UInt8' },
+            ],
+        };
+        const HEADER_BYTES = 4;
+
+        // Sistema de captura de duelos para análisis
+        const duelCapture = {
+            enabled: true,
+            messages: [],
+            startTime: Date.now(),
+            initialState: null,
+
+            captureMessage(type, payload) {
+                if (!this.enabled) return;
+                if (this.initialState === null) {
+                    this.initialState = JSON.parse(JSON.stringify(state));
+                }
+                this.messages.push({
+                    timestamp: Date.now() - this.startTime,
+                    type,
+                    payload: JSON.parse(JSON.stringify(payload)),
+                    stateAfter: JSON.parse(JSON.stringify(state)),
+                    raw: payload.payloadHex ?? null,
+                });
+            },
+
+            download() {
+                const data = {
+                    startTime: this.startTime,
+                    initialState: this.initialState,
+                    messages: this.messages,
+                };
+                const json = JSON.stringify(data, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `duel-${new Date().toISOString()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+        };
 
         function applyGraveCardSizeMode() {
             const isLarge = graveCardSizeMode === 'large';
@@ -1467,6 +1706,23 @@
             }
 
             return numeric;
+        }
+
+        function getStartingPlayerFromTypeChange(rawTypeChange = state.typeChange) {
+            const numeric = Number(rawTypeChange);
+            if (!Number.isFinite(numeric)) {
+                return null;
+            }
+            return (numeric & 0x1) ? 1 : 0;
+        }
+
+        function getTurnPlayerFromSeed(startingPlayer, turnCount) {
+            const starter = Number(startingPlayer);
+            const turn = Number(turnCount);
+            if (!Number.isFinite(starter) || !Number.isFinite(turn) || turn <= 0) {
+                return null;
+            }
+            return (starter + ((turn - 1) % 2)) % 2;
         }
 
         function getFallbackLp(player) {
@@ -1600,12 +1856,7 @@
         }
 
         function getAuthoritativeTurnPlayer() {
-            const startingPlayer = Number(state.startingPlayer);
-            const turnCount = Number(state.turnCount);
-            if (Number.isFinite(startingPlayer) && Number.isFinite(turnCount) && turnCount > 0) {
-                return (startingPlayer + ((turnCount - 1) % 2)) % 2;
-            }
-            return null;
+            return getTurnPlayerFromSeed(state.startingPlayer, state.turnCount);
         }
 
         function hydrateTurnInfoFromReplayEvents(replayEvents) {
@@ -1630,7 +1881,7 @@
             if (firstNewTurnPlayer !== null && firstNewTurnPlayer !== undefined) {
                 state.debugTurn.firstNewTurnPlayer = firstNewTurnPlayer;
                 if (state.startingPlayer === null || state.startingPlayer === undefined) {
-                    state.startingPlayer = firstNewTurnPlayer;
+                    state.startingPlayer = getStartingPlayerFromTypeChange() ?? firstNewTurnPlayer;
                 }
             }
 
@@ -1753,7 +2004,7 @@
 
         function getCardImageUrl(cardId) {
             const normalized = String(Number(cardId) >>> 0);
-            return `https://images.ygoprodeck.com/images/cards/${normalized}.jpg`;
+            return `/api/card-image/${normalized}`;
         }
 
         function loadHiddenCardDetails(source = '') {
@@ -2200,6 +2451,115 @@
             return `${controller}:${normalizedLocation}:${sequence ?? 'x'}`;
         }
 
+        function getZoneSnapshotKey(controller, location) {
+            return `${controller}:${normalizeLocation(location)}`;
+        }
+
+        function getCardSnapshotValue(card, fallbackCode = null) {
+            if (!card) return null;
+            return {
+                code: normalizeCardCode(card.code) ?? normalizeCardCode(fallbackCode) ?? null,
+                position: card.position ?? null,
+                sequence: Number(card.sequence),
+                location: normalizeLocation(card.location),
+                controller: Number(card.controller),
+                flags: card.flags ?? null,
+            };
+        }
+
+        function areCardSnapshotsEqual(left, right) {
+            if (!left && !right) return true;
+            if (!left || !right) return false;
+            return (
+                Number(left.controller) === Number(right.controller) &&
+                Number(left.location) === Number(right.location) &&
+                Number(left.sequence) === Number(right.sequence) &&
+                Number(left.code ?? null) === Number(right.code ?? null) &&
+                Number(left.position ?? null) === Number(right.position ?? null) &&
+                Number(left.flags ?? null) === Number(right.flags ?? null)
+            );
+        }
+
+        function buildZoneSnapshot(cards, controller, location, fallbackCode = null) {
+            const snapshot = {};
+            (Array.isArray(cards) ? cards : []).forEach((card) => {
+                const sequence = Number(card?.sequence);
+                if (!Number.isFinite(sequence)) {
+                    return;
+                }
+                snapshot[String(sequence)] = getCardSnapshotValue({
+                    ...card,
+                    controller,
+                    location,
+                    sequence,
+                }, fallbackCode);
+            });
+            return snapshot;
+        }
+
+        function applyFieldEntryDiff(nextSnapshotEntry) {
+            const fieldKey = getStateFieldKey(
+                nextSnapshotEntry.controller,
+                nextSnapshotEntry.location,
+                nextSnapshotEntry.sequence,
+            );
+            if (!fieldKey) {
+                return false;
+            }
+
+            const existingFieldCard = state.field[fieldKey] || null;
+            const nextCode = nextSnapshotEntry.code ?? existingFieldCard?.code ?? null;
+            const nextPosition = nextSnapshotEntry.position ?? existingFieldCard?.position ?? null;
+            const nextCard = {
+                ...(existingFieldCard || {}),
+                code: nextCode,
+                controller: nextSnapshotEntry.controller,
+                location: nextSnapshotEntry.location,
+                sequence: nextSnapshotEntry.sequence,
+                position: nextPosition,
+                flags: nextSnapshotEntry.flags ?? existingFieldCard?.flags ?? null,
+            };
+
+            if (areCardSnapshotsEqual(getCardSnapshotValue(existingFieldCard), getCardSnapshotValue(nextCard))) {
+                return false;
+            }
+
+            state.field[fieldKey] = nextCard;
+            return true;
+        }
+
+        function removeFieldEntry(controller, location, sequence) {
+            const fieldKey = getStateFieldKey(controller, location, sequence);
+            if (!fieldKey || !state.field[fieldKey]) {
+                return false;
+            }
+            delete state.field[fieldKey];
+            return true;
+        }
+
+        function syncHandSnapshot(player) {
+            const playerKey = String(player);
+            state.handSnapshots[playerKey] = { count: (state.hands[playerKey] || []).length };
+        }
+
+        function syncGraveSnapshot(player) {
+            const playerKey = String(player);
+            state.graveSnapshots[playerKey] = Array.isArray(state.graves[playerKey])
+                ? state.graves[playerKey].map((card) => ({
+                    code: card.code ?? null,
+                    sequence: card.sequence,
+                    position: card.position ?? null,
+                }))
+                : [];
+        }
+
+        function syncBanishedSnapshot(player) {
+            const playerKey = String(player);
+            // Banished cards are stored similarly to graves
+            // This will be used for location 0x20
+            state.banishedSnapshots[playerKey] = state.banishedSnapshots[playerKey] || [];
+        }
+
         function getVisibleFieldCellKey(controller, location, sequence) {
             const normalizedLocation = normalizeLocation(location);
             const perspectivePlayer = getPerspectivePlayer();
@@ -2208,11 +2568,11 @@
             const slot = isTopSide ? 5 - seq : seq + 1;
 
             if (normalizedLocation === 0x08 && seq >= 0 && seq <= 4) {
-                return `${isTopSide ? 'b' : 'd'}${slot}`;
+                return `${isTopSide ? 'a' : 'd'}${slot}`;
             }
 
             if (normalizedLocation === 0x04 && seq >= 0 && seq <= 4) {
-                return `${isTopSide ? 'a' : 'c'}${slot}`;
+                return `${isTopSide ? 'b' : 'c'}${slot}`;
             }
 
             if (normalizedLocation === 0x10) {
@@ -2384,7 +2744,7 @@
         }
 
         function animateHandShuffle(mappedPlayer) {
-            const container = getRenderedHandContainerForPlayer(player);
+            const container = getRenderedHandContainerForPlayer(mappedPlayer);
             if (!container) {
                 return;
             }
@@ -2525,12 +2885,29 @@
                 }
             });
 
+            // Limpiar state.field de entradas INVÁLIDAS:
+            // 1. Cartas de cementerio (0x10) o desterradas (0x20)
+            // 2. Claves visuales como 'a4', 'c3', 'graveTop', etc. que no son de estado
+            const visualCellKeys = new Set([
+                ...cellIds,
+                'graveTop', 'graveBottom', 'banishedTop', 'banishedBottom'
+            ]);
+            Object.keys(state.field || {}).forEach((fieldKey) => {
+                const card = state.field[fieldKey];
+                const isVisualKey = visualCellKeys.has(fieldKey);
+                const isCemeteryOrBanished = card && (card.location === 0x10 || card.location === 0x20);
+
+                if (isVisualKey || isCemeteryOrBanished) {
+                    delete state.field[fieldKey];
+                }
+            });
+
             Object.values(state.field || {}).forEach((fieldCard) => {
                 if (!fieldCard || fieldCard.controller === undefined || fieldCard.location === undefined || fieldCard.sequence === undefined) {
                     return;
                 }
 
-                if (fieldCard.location === 0x10) {
+                if (fieldCard.location === 0x10 || fieldCard.location === 0x20) {
                     return;
                 }
 
@@ -2639,6 +3016,55 @@
                 countLabel.style.background = 'rgba(24, 16, 8, 0.92)';
                 countLabel.style.border = '1px solid rgba(255, 219, 102, 0.4)';
                 countLabel.style.color = '#ffd966';
+                countLabel.style.fontSize = '12px';
+                countLabel.style.fontWeight = '700';
+                countLabel.style.display = 'flex';
+                countLabel.style.alignItems = 'center';
+                countLabel.style.justifyContent = 'center';
+
+                cell.appendChild(node);
+                cell.appendChild(countLabel);
+            });
+        }
+
+        function renderBanished() {
+            [
+                { cellId: 'banishedTop', player: 0 },
+                { cellId: 'banishedBottom', player: 1 },
+            ].forEach(({ cellId, player }) => {
+                const cell = document.getElementById(cellId);
+                if (!cell) return;
+                cell.innerHTML = '';
+                cell.style.cursor = 'pointer';
+
+                const banishedCards = Array.isArray(state.banished?.[player]) ? state.banished[player] : [];
+                if (!banishedCards.length) {
+                    return;
+                }
+
+                const topCard = banishedCards[banishedCards.length - 1];
+                const isFaceDown = !topCard?.code;
+                const node = createFieldCardNode(topCard?.code || 'hidden', isFaceDown, `${topCard?.code || 'Hidden'} @ ${cellId}`);
+                node.classList.add('banished-slot-card');
+                if (isFaceDown) {
+                    node.classList.add('field-facedown');
+                }
+                node.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                });
+
+                const countLabel = document.createElement('div');
+                countLabel.textContent = String(banishedCards.length);
+                countLabel.style.position = 'absolute';
+                countLabel.style.right = '-8px';
+                countLabel.style.bottom = '-10px';
+                countLabel.style.minWidth = '22px';
+                countLabel.style.height = '22px';
+                countLabel.style.padding = '0 6px';
+                countLabel.style.borderRadius = '12px';
+                countLabel.style.background = 'rgba(36, 10, 36, 0.92)';
+                countLabel.style.border = '1px solid rgba(192, 142, 255, 0.55)';
+                countLabel.style.color = '#c58eff';
                 countLabel.style.fontSize = '12px';
                 countLabel.style.fontWeight = '700';
                 countLabel.style.display = 'flex';
@@ -2791,6 +3217,7 @@
                 duelBoard.classList.add('hidden');
                 if (babylonCanvas) babylonCanvas.classList.toggle('hidden', !duelStarted);
                 lpContainer.classList.toggle('hidden', !duelStarted);
+                document.getElementById('downloadLogsButton').classList.toggle('hidden', !duelStarted);
                 buttonContainer.classList.add('hidden');
                 phaseBar.classList.toggle('hidden', !duelStarted);
                 player1Container.classList.toggle('hidden', !duelStarted);
@@ -2801,24 +3228,43 @@
             }
 
             if (window.ViewerBoardMode?.renderBoardScene) {
-                window.ViewerBoardMode.renderBoardScene({
-                    state,
-                    getPerspectivePlayer,
-                    getRenderedPlayerOrder,
-                    renderHand,
-                    renderField,
-                    renderGraves,
-                    renderDeckCounts,
-                    updatePhaseButtons,
-                    updateTopBar,
-                    updateBoardOrientation,
-                });
+                try {
+                    console.log('Llamando a ViewerBoardMode.renderBoardScene');
+                    window.ViewerBoardMode.renderBoardScene({
+                        state,
+                        getPerspectivePlayer,
+                        getRenderedPlayerOrder,
+                        renderHand,
+                        renderField,
+                        renderGraves,
+                        renderDeckCounts,
+                        updatePhaseButtons,
+                        updateTopBar,
+                        updateBoardOrientation,
+                    });
+                    console.log('ViewerBoardMode.renderBoardScene completado');
+                } catch (err) {
+                    console.error('Error en ViewerBoardMode.renderBoardScene:', err);
+                    console.log('Usando fallback render');
+                    const { topPlayerIndex, bottomPlayerIndex } = getRenderedPlayerOrder();
+                    renderHand('player1Row1', state.hands[topPlayerIndex] || [], true);
+                    renderHand('player2Row1', state.hands[bottomPlayerIndex] || [], false);
+                    renderField();
+                    renderGraves();
+                    renderBanished();
+                    renderDeckCounts();
+                    updatePhaseButtons();
+                    updateTopBar();
+                    updateBoardOrientation();
+                }
             } else {
+                console.log('ViewerBoardMode no disponible, usando fallback render');
                 const { topPlayerIndex, bottomPlayerIndex } = getRenderedPlayerOrder();
                 renderHand('player1Row1', state.hands[topPlayerIndex] || [], true);
                 renderHand('player2Row1', state.hands[bottomPlayerIndex] || [], false);
                 renderField();
                 renderGraves();
+                renderBanished();
                 renderDeckCounts();
                 updatePhaseButtons();
                 updateTopBar();
@@ -2829,6 +3275,7 @@
         function resetRoundState() {
             state.hands = { 0: [], 1: [] };
             state.field = {};
+            state.fieldUpdateSnapshots = {};
             state.graves = { 0: [], 1: [] };
             state.turnPlayer = null;
             state.turnPlayerFromSnapshot = null;
@@ -2927,17 +3374,21 @@
                     if (String(session.phase || '').toLowerCase() === 'waiting') {
                         replayState.live = true;
                     }
-                    state.startingPlayer = session.startingPlayer !== null && session.startingPlayer !== undefined
-                        ? mapProtocolPlayer(session.startingPlayer)
-                        : null;
+                    const seededStartingPlayer = getStartingPlayerFromTypeChange(session.typeChange);
+                    state.startingPlayer = seededStartingPlayer !== null
+                        ? seededStartingPlayer
+                        : (session.startingPlayer !== null && session.startingPlayer !== undefined
+                            ? mapProtocolPlayer(session.startingPlayer)
+                            : null);
                     if (state.debugTurn) {
                         state.debugTurn.startingPlayerRaw = session.startingPlayer;
                     }
-                    state.turnPlayerFromSnapshot = session.turnPlayer !== null && session.turnPlayer !== undefined
-                        ? mapProtocolPlayer(session.turnPlayer)
-                        : state.turnPlayerFromSnapshot;
-                    state.turnPlayer = null;
                     state.turnCount = session.turnCount ?? state.turnCount;
+                    state.turnPlayerFromSnapshot = getTurnPlayerFromSeed(state.startingPlayer, state.turnCount);
+                    if (state.turnPlayerFromSnapshot === null && session.turnPlayer !== null && session.turnPlayer !== undefined) {
+                        state.turnPlayerFromSnapshot = mapProtocolPlayer(session.turnPlayer);
+                    }
+                    state.turnPlayer = null;
                     state.playerTimes = session.playerTimes || state.playerTimes;
                     state.playerTimeUpdatedAt = session.playerTimeUpdatedAt || state.playerTimeUpdatedAt;
                     state.playerLp = session.playerLp || state.playerLp;
@@ -2948,6 +3399,11 @@
                     state.hands = session.hands || state.hands;
                     state.field = session.field || state.field;
                     state.graves = session.graves || state.graves;
+                    state.banished = session.banished || state.banished;
+                    state.fieldUpdateSnapshots = session.fieldUpdateSnapshots || state.fieldUpdateSnapshots;
+                    state.handSnapshots = session.handSnapshots || state.handSnapshots;
+                    state.graveSnapshots = session.graveSnapshots || state.graveSnapshots;
+                    state.banishedSnapshots = session.banishedSnapshots || state.banishedSnapshots;
                     hydrateTurnInfoFromReplayEvents(session.replayEvents);
 
                     if (
@@ -2961,7 +3417,12 @@
                         // cards already present in partial snapshots (especially hands).
                         state.hands = { 0: [], 1: [] };
                         state.field = {};
+                        state.fieldUpdateSnapshots = {};
+                        state.handSnapshots = { 0: { count: 0 }, 1: { count: 0 } };
+                        state.graveSnapshots = { 0: [], 1: [] };
+                        state.banishedSnapshots = { 0: [], 1: [] };
                         state.graves = { 0: [], 1: [] };
+                        state.banished = { 0: [], 1: [] };
                         state.startingPlayer = null;
                         state.turnCount = 0;
                         state.turnPlayer = null;
@@ -2984,9 +3445,14 @@
                     state.room = state.room || session.room;
                     state.clientFlow = session.clientFlow || state.clientFlow || state.room?.roomClient || 'edopro';
                     state.typeChange = session.typeChange ?? state.typeChange;
-                    state.turnPlayerFromSnapshot = session.turnPlayer !== null && session.turnPlayer !== undefined
-                        ? mapProtocolPlayer(session.turnPlayer)
-                        : state.turnPlayerFromSnapshot;
+                    if (state.startingPlayer === null || state.startingPlayer === undefined) {
+                        state.startingPlayer = getStartingPlayerFromTypeChange() ?? state.startingPlayer;
+                    }
+                    state.turnCount = session.turnCount ?? state.turnCount;
+                    state.turnPlayerFromSnapshot = getTurnPlayerFromSeed(state.startingPlayer, state.turnCount);
+                    if (state.turnPlayerFromSnapshot === null && session.turnPlayer !== null && session.turnPlayer !== undefined) {
+                        state.turnPlayerFromSnapshot = mapProtocolPlayer(session.turnPlayer);
+                    }
                     hydrateTurnInfoFromReplayEvents(session.replayEvents);
                     state.turnPlayer = getAuthoritativeTurnPlayer();
                     state.playerLp = session.playerLp || state.playerLp;
@@ -3017,6 +3483,11 @@
         });
 
         function handleEventData(data) {
+            // Capturar mensaje para análisis
+            if (data.message === 'game_msg' && data.payload?.type) {
+                // Capturar con ambos: el tipo de mensaje ('game_msg') y el payload
+                duelCapture.captureMessage(data.message, data.payload);
+            }
 
             if (data.message === 'connection_open') {
                 state.room = data.payload.room || state.room;
@@ -3026,7 +3497,12 @@
                     state.phase = 'dueling';
                     state.hands = { 0: [], 1: [] };
                     state.field = {};
+                    state.fieldUpdateSnapshots = {};
+                    state.handSnapshots = { 0: { count: 0 }, 1: { count: 0 } };
+                    state.graveSnapshots = { 0: [], 1: [] };
+                    state.banishedSnapshots = { 0: [], 1: [] };
                     state.graves = { 0: [], 1: [] };
+                    state.banished = { 0: [], 1: [] };
                     state.turnCount = 0;
                     state.pendingReveal = null;
                     state.perspectiveInitialized = false;
@@ -3090,6 +3566,11 @@
 
             if (data.message === 'waiting_type_change') {
                 state.typeChange = data.payload.type;
+                const seededStartingPlayer = getStartingPlayerFromTypeChange();
+                if (seededStartingPlayer !== null) {
+                    state.startingPlayer = seededStartingPlayer;
+                    state.turnPlayer = getAuthoritativeTurnPlayer();
+                }
                 appendLog(`Type change translated: ${data.payload.type}`);
                 renderState();
             }
@@ -3178,6 +3659,7 @@
                     1: buildHiddenCardsFromCount(payload?.counts?.hand?.[1]),
                 };
                 state.field = {};
+                state.fieldUpdateSnapshots = {};
                 state.graves = { 0: [], 1: [] };
                 state.pendingReveal = null;
 
@@ -3197,6 +3679,27 @@
                 const grave1 = Math.max(0, Number(payload?.counts?.grave?.[1] || 0));
                 state.graves[0] = Array.from({ length: grave0 }, (_, index) => ({ code: null, position: null, sequence: index }));
                 state.graves[1] = Array.from({ length: grave1 }, (_, index) => ({ code: null, position: null, sequence: index }));
+
+                state.handSnapshots = {
+                    0: { count: (state.hands[0] || []).length },
+                    1: { count: (state.hands[1] || []).length },
+                };
+
+                state.graveSnapshots = {
+                    0: state.graves[0].map((card) => ({
+                        code: card.code ?? null,
+                        sequence: card.sequence,
+                        position: card.position ?? null,
+                    })),
+                    1: state.graves[1].map((card) => ({
+                        code: card.code ?? null,
+                        sequence: card.sequence,
+                        position: card.position ?? null,
+                    })),
+                };
+
+                state.banished = { 0: [], 1: [] };
+                state.banishedSnapshots = { 0: [], 1: [] };
 
                 appendLog(
                     `RELOAD_FIELD_TRANSLATED | mzone/szone=${zones.length} | hand P0=${state.hands[0].length} P1=${state.hands[1].length} | grave P0=${grave0} P1=${grave1}`
@@ -3218,9 +3721,9 @@
                 if (payload.type === 'MSG_NEW_TURN') {
                     const nextTurn = (state.turnCount ?? 0) + 1;
                     const mappedTurnPlayer = mapProtocolPlayer(payload.player);
+                    const seededStartingPlayer = getStartingPlayerFromTypeChange();
                     const hexMsg = payload.payloadHex || '-';
                     appendLog(`MSG_NEW_TURN | hex=${hexMsg} | raw=${payload.player} | typeChange=${state.typeChange ?? 0} | mapped=${mappedTurnPlayer}`);
-                    clearTurnLog(`TURN TRACE RESET | turn=${nextTurn} | activePlayer=P${mappedTurnPlayer}`);
                     state.battlePhaseSeen = false;
                     if (state.debugTurn) {
                         if (state.debugTurn.firstNewTurnPlayer === null || state.debugTurn.firstNewTurnPlayer === undefined) {
@@ -3232,7 +3735,7 @@
                         state.debugTurn.lastHex = payload.payloadHex;
                     }
                     if (state.startingPlayer === null || state.startingPlayer === undefined) {
-                        state.startingPlayer = mappedTurnPlayer;
+                        state.startingPlayer = seededStartingPlayer ?? mappedTurnPlayer;
                         if (state.debugTurn) {
                             state.debugTurn.startingPlayerRaw = payload.player;
                         }
@@ -3240,7 +3743,11 @@
                     state.turnPlayerFromMessage = mappedTurnPlayer;
                     state.turnCount = nextTurn;
                     state.turnPlayer = getAuthoritativeTurnPlayer();
-                    state.playerTimeUpdatedAt[mappedTurnPlayer] = state.playerTimeUpdatedAt[mappedTurnPlayer] || Date.now();
+                    clearTurnLog(`TURN TRACE RESET | turn=${nextTurn} | activePlayer=P${state.turnPlayer ?? mappedTurnPlayer}`);
+                    const activeTurnPlayer = state.turnPlayer;
+                    if (activeTurnPlayer !== null && activeTurnPlayer !== undefined) {
+                        state.playerTimeUpdatedAt[activeTurnPlayer] = state.playerTimeUpdatedAt[activeTurnPlayer] || Date.now();
+                    }
                 }
 
                 if (payload.type === 'MSG_NEW_PHASE') {
@@ -3250,7 +3757,15 @@
                     }
                 }
 
-                if (payload.type === 'MSG_START') {
+                    if (payload.type === 'MSG_START') {
+                    state.fieldUpdateSnapshots = {};
+                    if (payload.playerType !== null && payload.playerType !== undefined) {
+                        state.typeChange = payload.playerType;
+                        const seededStartingPlayer = getStartingPlayerFromTypeChange(payload.playerType);
+                        if (seededStartingPlayer !== null && (state.startingPlayer === null || state.startingPlayer === undefined)) {
+                            state.startingPlayer = seededStartingPlayer;
+                        }
+                    }
                     const lp0 = Number(payload.lp0);
                     const lp1 = Number(payload.lp1);
                     if (Number.isFinite(lp0) && lp0 > 0) state.playerLp[0] = Math.round(lp0);
@@ -3264,24 +3779,33 @@
                     const drawCardIds = (payload.cards || []).map((card) => normalizeCardCode(card?.code));
                     drawCardIds.forEach((code) => setLastValidCardId(code, 'MSG_DRAW'));
                     setCardDebug(`draw | player=${mappedPlayer} | count=${payload.count} | cardIds=${drawCardIds.map((code) => formatCardId(code)).join(',') || 'hidden/unknown'}`);
-                    const parsedCards = Array.isArray(payload.cards)
-                        ? payload.cards.map((card, index) => normalizeCardCode(card?.code) ?? `hidden-${Date.now()}-${index}-${Math.random().toString(16).slice(2, 8)}`)
-                        : [];
                     const declaredCount = Math.max(0, Number(payload.count ?? 0));
-                    const missingCards = Math.max(0, declaredCount - parsedCards.length);
-                    const drawnCards = [
-                        ...parsedCards,
-                        ...createHiddenCards(missingCards),
-                    ];
-                    if (!Array.isArray(payload.cards) || parsedCards.length === 0) {
-                        drawnCards.push(...createHiddenCards(Math.max(0, declaredCount - drawnCards.length)));
+                    const currentCount = (state.hands[mappedPlayer] || []).length;
+                    const lastTrackedCount = state.handSnapshots[String(mappedPlayer)]?.count ?? 0;
+
+                    // Si el count actual ya refleja este draw (duplicado), ignorar
+                    if (currentCount >= lastTrackedCount + declaredCount) {
+                        appendLog(`DRAW_SKIP_DUPLICATE | player=${mappedPlayer} | currentCount=${currentCount} | expected=${lastTrackedCount + declaredCount}`);
+                    } else {
+                        const parsedCards = Array.isArray(payload.cards)
+                            ? payload.cards.map((card, index) => normalizeCardCode(card?.code) ?? `hidden-${Date.now()}-${index}-${Math.random().toString(16).slice(2, 8)}`)
+                            : [];
+                        const missingCards = Math.max(0, declaredCount - parsedCards.length);
+                        const drawnCards = [
+                            ...parsedCards,
+                            ...createHiddenCards(missingCards),
+                        ];
+                        if (!Array.isArray(payload.cards) || parsedCards.length === 0) {
+                            drawnCards.push(...createHiddenCards(Math.max(0, declaredCount - drawnCards.length)));
+                        }
+                        state.hands[mappedPlayer] = [...(state.hands[mappedPlayer] || []), ...drawnCards];
+                        if (state.pileCounts.deck[mappedPlayer] !== null && state.pileCounts.deck[mappedPlayer] !== undefined) {
+                            state.pileCounts.deck[mappedPlayer] = Math.max(0, Number(state.pileCounts.deck[mappedPlayer]) - declaredCount);
+                        }
+                        appendLog(`DRAW_SYNC | declared=${declaredCount} parsed=${parsedCards.length} appended=${drawnCards.length}`);
+                        appendLog(`HAND COUNT | after DRAW | P0=${(state.hands[0] || []).length} | P1=${(state.hands[1] || []).length}`);
+                        syncHandSnapshot(mappedPlayer);
                     }
-                    state.hands[mappedPlayer] = [...(state.hands[mappedPlayer] || []), ...drawnCards];
-                    if (state.pileCounts.deck[mappedPlayer] !== null && state.pileCounts.deck[mappedPlayer] !== undefined) {
-                        state.pileCounts.deck[mappedPlayer] = Math.max(0, Number(state.pileCounts.deck[mappedPlayer]) - declaredCount);
-                    }
-                    appendLog(`DRAW_SYNC | declared=${declaredCount} parsed=${parsedCards.length} appended=${drawnCards.length}`);
-                    appendLog(`HAND COUNT | after DRAW | P0=${(state.hands[0] || []).length} | P1=${(state.hands[1] || []).length}`);
                 }
 
                 if (payload.type === 'MSG_DAMAGE' && payload.player !== null && payload.amount !== null && payload.amount !== undefined) {
@@ -3314,6 +3838,7 @@
                         [current[index], current[randomIndex]] = [current[randomIndex], current[index]];
                     }
                     state.hands[mappedPlayer] = current;
+                    syncHandSnapshot(mappedPlayer);
                     setCardDebug(`shuffle_hand | player=${mappedPlayer} | cards=${current.length} | hex=${payload.payloadHex || '-'}`);
                     appendLog(`HAND SHUFFLE DETECTED | player=${mappedPlayer} | cards=${current.length} | hex=${payload.payloadHex || '-'}`);
                     renderState();
@@ -3351,6 +3876,14 @@
 
                     if (previousFieldKey) {
                         delete state.field[previousFieldKey];
+                        // Limpiar snapshot zona origen
+                        const prevNormalizedLoc = normalizeLocation(payload.previousLocation);
+                        if (prevNormalizedLoc !== 0x10 && prevNormalizedLoc !== 0x01) {
+                            const prevZoneKey = getZoneSnapshotKey(mappedPrevController, prevNormalizedLoc);
+                            const prevZoneSnap = { ...(state.fieldUpdateSnapshots[prevZoneKey] || {}) };
+                            delete prevZoneSnap[String(payload.previousSequence)];
+                            state.fieldUpdateSnapshots[prevZoneKey] = prevZoneSnap;
+                        }
                     } else if (normalizeLocation(payload.currentLocation) === 0x10) {
                         const removedFallbackKey = removeFallbackFieldCardFromMove(payload, moveCode);
                         if (removedFallbackKey) {
@@ -3387,6 +3920,27 @@
                         ];
                     }
 
+                    // Sincronizar handSnapshots después de modificar manos
+                    syncHandSnapshot(mappedPrevController);
+                    syncHandSnapshot(mappedCurrController);
+
+                    // Limpiar de snapshots de zona origen
+                    const prevNormLoc = normalizeLocation(payload.previousLocation);
+                    if (prevNormLoc === 0x10) {
+                        // Limpiar de graveSnapshots si viene del grave
+                        const playerKey = String(mappedPrevController);
+                        state.graveSnapshots[playerKey] = (state.graveSnapshots[playerKey] || []).filter(
+                            (card) => Number(card.sequence) !== Number(payload.previousSequence)
+                        );
+                    } else if (prevNormLoc === 0x20) {
+                        // Limpiar de banishedSnapshots si viene del banished
+                        const playerKey = String(mappedPrevController);
+                        state.banishedSnapshots[playerKey] = (state.banishedSnapshots[playerKey] || []).filter(
+                            (card) => Number(card.sequence) !== Number(payload.previousSequence)
+                        );
+                    }
+                    // fieldUpdateSnapshots ya se limpia en el bloque anterior (delete state.field[previousFieldKey])
+
                     if (normalizeLocation(payload.currentLocation) === 0x10 && payload.currentController !== null) {
                         const resolvedCode = moveCode ?? previousFieldCard?.code ?? null;
                         const playerKey = String(mappedCurrController);
@@ -3404,11 +3958,40 @@
                             existingGrave.push(graveEntry);
                         }
                         state.graves[playerKey] = existingGrave;
+                        syncGraveSnapshot(mappedCurrController);
+                        renderGraves();
                         appendLog(`GRAVE_APPLY | player=P${playerKey} | size=${existingGrave.length} | code=${formatCardId(graveEntry.code)}`);
+                    }
+
+                    if (normalizeLocation(payload.currentLocation) === 0x20 && payload.currentController !== null) {
+                        const resolvedCode = moveCode ?? previousFieldCard?.code ?? null;
+                        const playerKey = String(mappedCurrController);
+                        const existingBanished = Array.isArray(state.banished[playerKey]) ? [...state.banished[playerKey]] : [];
+                        const existingIndex = existingBanished.findIndex((item) => Number(item.sequence) === Number(payload.currentSequence));
+                        const existingCode = existingIndex >= 0 ? existingBanished[existingIndex]?.code ?? null : null;
+                        const banishedEntry = {
+                            code: resolvedCode ?? existingCode,
+                            position: payload.currentPosition,
+                            sequence: payload.currentSequence,
+                        };
+                        if (existingIndex >= 0) {
+                            existingBanished[existingIndex] = { ...existingBanished[existingIndex], ...banishedEntry };
+                        } else {
+                            existingBanished.push(banishedEntry);
+                        }
+                        state.banished[playerKey] = existingBanished;
+                        syncBanishedSnapshot(mappedCurrController);
+                        renderBanished();
+                        appendLog(`BANISHED_APPLY | player=P${playerKey} | size=${existingBanished.length} | code=${formatCardId(banishedEntry.code)}`);
                     }
 
                     const placeCardOnField = () => {
                         if (normalizeLocation(payload.currentLocation) === 0x10) {
+                            renderState();
+                            return;
+                        }
+
+                        if (normalizeLocation(payload.currentLocation) === 0x20) {
                             renderState();
                             return;
                         }
@@ -3425,6 +4008,19 @@
                                 location: payload.currentLocation,
                                 sequence: payload.currentSequence,
                                 position: payload.currentPosition,
+                            };
+                            // Actualizar snapshot zona destino
+                            const currZoneKey = getZoneSnapshotKey(mappedCurrController, normalizeLocation(payload.currentLocation));
+                            state.fieldUpdateSnapshots[currZoneKey] = {
+                                ...(state.fieldUpdateSnapshots[currZoneKey] || {}),
+                                [String(payload.currentSequence)]: getCardSnapshotValue({
+                                    code: moveCode ?? state.field[currentStateFieldKey]?.code ?? null,
+                                    controller: mappedCurrController,
+                                    location: payload.currentLocation,
+                                    sequence: payload.currentSequence,
+                                    position: payload.currentPosition,
+                                    flags: null,
+                                }),
                             };
                         }
                         renderState();
@@ -3458,6 +4054,17 @@
                     const resolvedCode = normalizeCardCode(payload.code) ?? state.pendingReveal?.code ?? null;
                     const updatePositionInfo = decodeCardPosition(payload.position);
                     const normalizedUpdateLocation = normalizeLocation(payload.location);
+                    const zoneSnapshotKey = getZoneSnapshotKey(mappedPlayer, normalizedUpdateLocation);
+                    const previousZoneSnapshot = state.fieldUpdateSnapshots[zoneSnapshotKey] || {};
+                    const nextEntrySnapshot = getCardSnapshotValue({
+                        code: resolvedCode,
+                        controller: mappedPlayer,
+                        location: normalizedUpdateLocation,
+                        sequence: payload.sequence,
+                        position: payload.position,
+                        flags: payload.flags,
+                    });
+                    const previousEntrySnapshot = previousZoneSnapshot[String(payload.sequence)] || null;
                     setLastValidCardId(resolvedCode, 'MSG_UPDATE_CARD_RESOLVED');
                     const currentFieldKey = getVisibleFieldCellKey(mappedPlayer, normalizedUpdateLocation, payload.sequence);
                     const currentStateFieldKey = getStateFieldKey(mappedPlayer, normalizedUpdateLocation, payload.sequence);
@@ -3468,6 +4075,10 @@
                     appendLog(
                         `UPDATE_CARD_TRANSLATED | code=${formatCardId(resolvedCode)} | target=${endpointLabel(payload.player, normalizedUpdateLocation, payload.sequence, payload.position)}(${updatePositionInfo.label}) | flags=${payload.flags ?? '-'} | fieldCell=${currentFieldKey || '-'}`
                     );
+
+                    if (areCardSnapshotsEqual(previousEntrySnapshot, nextEntrySnapshot)) {
+                        return;
+                    }
 
                     if (currentStateFieldKey) {
                         const existingFieldCard = state.field[currentStateFieldKey] || null;
@@ -3489,27 +4100,32 @@
                             }
                             state.graves[playerKey] = grave;
                         } else if (finalCode !== null && finalCode !== undefined) {
-                            state.field[currentStateFieldKey] = {
-                                ...(existingFieldCard || {}),
+                            applyFieldEntryDiff({
                                 code: finalCode,
                                 controller: mappedPlayer,
                                 location: normalizedUpdateLocation,
-                                sequence: payload.sequence,
+                                sequence: Number(payload.sequence),
                                 position: finalPosition,
-                            };
+                                flags: payload.flags ?? existingFieldCard?.flags ?? null,
+                            });
                         } else if (finalPosition !== null && finalPosition !== undefined) {
-                            state.field[currentStateFieldKey] = {
-                                ...(existingFieldCard || {}),
+                            applyFieldEntryDiff({
                                 code: existingFieldCard?.code ?? null,
                                 controller: mappedPlayer,
                                 location: normalizedUpdateLocation,
-                                sequence: payload.sequence,
+                                sequence: Number(payload.sequence),
                                 position: finalPosition,
-                            };
+                                flags: payload.flags ?? existingFieldCard?.flags ?? null,
+                            });
                         } else if (payload.position === null || payload.position === undefined) {
-                            delete state.field[currentStateFieldKey];
+                            removeFieldEntry(mappedPlayer, normalizedUpdateLocation, payload.sequence);
                         }
                     }
+
+                    state.fieldUpdateSnapshots[zoneSnapshotKey] = {
+                        ...previousZoneSnapshot,
+                        [String(payload.sequence)]: nextEntrySnapshot,
+                    };
 
                     if (resolvedCode !== null && resolvedCode !== undefined) {
                         state.pendingReveal = null;
@@ -3517,12 +4133,20 @@
                 }
 
                 if (payload.type === 'MSG_UPDATE_DATA') {
+                    console.log('[MSG_UPDATE_DATA] Procesando con payload:', JSON.stringify({player: payload.player, location: payload.location, cards: payload.cards?.length}));
+
                     const mappedPlayer = mapProtocolPlayer(payload.player);
                     const resolvedCards = (payload.cards || []).map((card) => ({
                         ...card,
                         code: normalizeCardCode(card.code) ?? state.pendingReveal?.code ?? null,
                     }));
                     const normalizedPayloadLocation = normalizeLocation(payload.location);
+
+                    console.log('[MSG_UPDATE_DATA] mappedPlayer:', mappedPlayer, 'normalizedLocation:', normalizedPayloadLocation, 'cards:', resolvedCards.length);
+
+                    const zoneSnapshotKey = getZoneSnapshotKey(mappedPlayer, normalizedPayloadLocation);
+                    const previousZoneSnapshot = state.fieldUpdateSnapshots[zoneSnapshotKey] || {};
+                    const nextZoneSnapshot = buildZoneSnapshot(resolvedCards, mappedPlayer, normalizedPayloadLocation, state.pendingReveal?.code ?? null);
                     (resolvedCards || []).forEach((card) => setLastValidCardId(card.code, 'MSG_UPDATE_DATA_RESOLVED'));
                     setCardDebug(`update_data | player=${payload.player} | location=${payload.location} | cards=${Array.isArray(payload.cards) ? payload.cards.length : 0} | cardIds=[${formatUpdateDataCards(resolvedCards)}] | hex=${payload.payloadHex || '-'}`);
                     appendLog(
@@ -3531,26 +4155,11 @@
 
                     if (Array.isArray(resolvedCards)) {
                         if (normalizedPayloadLocation === 0x04 || normalizedPayloadLocation === 0x08) {
-                            const activeSequences = new Set(
-                                resolvedCards
-                                    .map((card) => Number(card.sequence))
-                                    .filter((sequence) => Number.isFinite(sequence))
-                            );
-
-                            Object.keys(state.field).forEach((fieldKey) => {
-                                const fieldCard = state.field[fieldKey];
-                                if (!fieldCard) {
+                            Object.keys(previousZoneSnapshot).forEach((sequenceKey) => {
+                                if (Object.prototype.hasOwnProperty.call(nextZoneSnapshot, sequenceKey)) {
                                     return;
                                 }
-
-                                if (
-                                    Number(fieldCard.controller) === Number(mappedPlayer) &&
-                                    Number(normalizeLocation(fieldCard.location)) === Number(normalizedPayloadLocation) &&
-                                    Number.isFinite(Number(fieldCard.sequence)) &&
-                                    !activeSequences.has(Number(fieldCard.sequence))
-                                ) {
-                                    delete state.field[fieldKey];
-                                }
+                                removeFieldEntry(mappedPlayer, normalizedPayloadLocation, Number(sequenceKey));
                             });
                         }
 
@@ -3576,41 +4185,115 @@
                                     grave.push(graveEntry);
                                 }
                                 state.graves[playerKey] = grave;
+                                syncGraveSnapshot(mappedPlayer);
+                                renderGraves();
+                                return;
+                            }
+
+                            if (normalizedPayloadLocation === 0x20) {
+                                const playerKey = String(mappedPlayer);
+                                const banished = Array.isArray(state.banished[playerKey]) ? [...state.banished[playerKey]] : [];
+                                const existingIndex = banished.findIndex((item) => Number(item.sequence) === Number(card.sequence));
+                                const banishedEntry = {
+                                    code: card.code ?? (existingIndex >= 0 ? banished[existingIndex]?.code ?? null : null),
+                                    position: card.position,
+                                    sequence: card.sequence,
+                                };
+                                if (existingIndex >= 0) {
+                                    banished[existingIndex] = { ...banished[existingIndex], ...banishedEntry };
+                                } else {
+                                    banished.push(banishedEntry);
+                                }
+                                state.banished[playerKey] = banished;
+                                syncBanishedSnapshot(mappedPlayer);
+                                renderBanished();
                                 return;
                             }
 
                             const existingFieldCard = state.field[currentStateFieldKey] || null;
                             const finalCode = card.code ?? existingFieldCard?.code ?? null;
                             const finalPosition = card.position ?? existingFieldCard?.position ?? null;
+                            const nextEntrySnapshot = nextZoneSnapshot[String(card.sequence)] || null;
+                            const previousEntrySnapshot = previousZoneSnapshot[String(card.sequence)] || null;
 
                             if (card.code !== null && card.code !== undefined) {
                                 setHighlightCell(currentFieldKey);
                             }
 
+                            if (areCardSnapshotsEqual(previousEntrySnapshot, nextEntrySnapshot)) {
+                                return;
+                            }
+
                             if (finalCode !== null && finalCode !== undefined) {
-                                state.field[currentStateFieldKey] = {
-                                    ...(existingFieldCard || {}),
+                                applyFieldEntryDiff({
                                     code: finalCode,
                                     controller: mappedPlayer,
                                     location: normalizedPayloadLocation,
-                                    sequence: card.sequence,
+                                    sequence: Number(card.sequence),
                                     position: finalPosition,
-                                };
+                                    flags: card.flags ?? existingFieldCard?.flags ?? null,
+                                });
                             } else if (finalPosition !== null && finalPosition !== undefined) {
-                                state.field[currentStateFieldKey] = {
-                                    ...(existingFieldCard || {}),
+                                applyFieldEntryDiff({
                                     code: existingFieldCard?.code ?? null,
                                     controller: mappedPlayer,
                                     location: normalizedPayloadLocation,
-                                    sequence: card.sequence,
+                                    sequence: Number(card.sequence),
                                     position: finalPosition,
-                                };
+                                    flags: card.flags ?? existingFieldCard?.flags ?? null,
+                                });
                             }
                         });
                     }
 
+                    state.fieldUpdateSnapshots[zoneSnapshotKey] = nextZoneSnapshot;
+
                     if (resolvedCards.some((card) => card.code !== null && card.code !== undefined)) {
                         state.pendingReveal = null;
+                    }
+                }
+
+                if (payload.type === 'MSG_POS_CHANGE') {
+                    const mappedPlayer = mapProtocolPlayer(payload.controller);
+                    const normalizedLocation = normalizeLocation(payload.location);
+                    const currentFieldKey = getVisibleFieldCellKey(mappedPlayer, normalizedLocation, payload.sequence);
+                    const currentStateFieldKey = getStateFieldKey(mappedPlayer, normalizedLocation, payload.sequence);
+
+                    if (currentStateFieldKey && currentFieldKey) {
+                        setCardDebug(`pos_change | cell=${currentFieldKey} | prev=${payload.previousPosition} | curr=${payload.currentPosition} | code=${formatCardId(normalizeCardCode(payload.code))}`);
+                        appendLog(`POS_CHANGE | cell=${currentFieldKey} | position: ${payload.previousPosition} → ${payload.currentPosition}`);
+
+                        const zoneSnapshotKey = getZoneSnapshotKey(mappedPlayer, normalizedLocation);
+                        const previousZoneSnapshot = state.fieldUpdateSnapshots[zoneSnapshotKey] || {};
+                        const previousEntrySnapshot = previousZoneSnapshot[String(payload.sequence)] || null;
+
+                        const nextEntrySnapshot = getCardSnapshotValue({
+                            code: normalizeCardCode(payload.code) ?? state.field[currentStateFieldKey]?.code ?? null,
+                            controller: mappedPlayer,
+                            location: normalizedLocation,
+                            sequence: payload.sequence,
+                            position: payload.currentPosition,
+                            flags: state.field[currentStateFieldKey]?.flags ?? null,
+                        });
+
+                        // Si la posición cambió, aplicar
+                        if (!areCardSnapshotsEqual(previousEntrySnapshot, nextEntrySnapshot)) {
+                            applyFieldEntryDiff({
+                                code: state.field[currentStateFieldKey]?.code ?? normalizeCardCode(payload.code) ?? null,
+                                controller: mappedPlayer,
+                                location: normalizedLocation,
+                                sequence: payload.sequence,
+                                position: payload.currentPosition,
+                                flags: state.field[currentStateFieldKey]?.flags ?? null,
+                            });
+
+                            state.fieldUpdateSnapshots[zoneSnapshotKey] = {
+                                ...previousZoneSnapshot,
+                                [String(payload.sequence)]: nextEntrySnapshot,
+                            };
+
+                            setHighlightCell(currentFieldKey);
+                        }
                     }
                 }
 
@@ -3623,7 +4306,7 @@
                     appendLog(`UNHANDLED_TRANSLATION | rawType=${payload.rawType} | hex=${hexPreview}${String(payload.payloadHex || '').length > 96 ? '...' : ''}`);
                 }
 
-                if (VERBOSE_EVENT_LOGS || (payload.type !== 'MSG_UPDATE_DATA' && payload.type !== 'MSG_UPDATE_CARD')) {
+                if (VERBOSE_EVENT_LOGS || (payload.type !== 'MSG_UPDATE_DATA' && payload.type !== 'MSG_UPDATE_CARD' && payload.type !== 'MSG_POS_CHANGE')) {
                     appendLog(`${payload.type} | raw=${payload.rawType}${payload.player !== null && payload.player !== undefined ? ` | player=${payload.player}` : ''}${payload.amount !== null && payload.amount !== undefined ? ` | amount=${payload.amount}` : ''}${payload.count !== null && payload.count !== undefined ? ` | count=${payload.count}` : ''}`);
                 }
                 if (payload.type !== 'MSG_MOVE' && !handledImmediateRender) {
@@ -3799,6 +4482,200 @@
             applyGraveCardSizeMode();
         });
         applyGraveCardSizeMode();
+
+        // Event listener para descargar logs
+        const downloadLogsButton = document.getElementById('downloadLogsButton');
+        if (downloadLogsButton) {
+            downloadLogsButton.addEventListener('click', () => {
+                duelCapture.download();
+                alert('Logs descargados. Abre el archivo JSON en el analizador.');
+            });
+        }
+
+        // ========== SISTEMA DE REPLAY MODE - POSTMESSAGE ==========
+        if (replayModeActive) {
+            let replayMessageCount = 0;
+
+            // ============ HEX INSPECTOR SETUP ============
+            const hexInspectorContainer = document.getElementById('hexInspectorContainer');
+            const hexInspectorToggle = document.getElementById('hexInspectorToggle');
+            const hexInspectorClose = document.getElementById('hexInspectorClose');
+            const hexInspectorTitle = document.getElementById('hexInspectorTitle');
+            const hexViewerPane = document.getElementById('hexViewerPane');
+            const fieldsTableBody = document.getElementById('fieldsTableBody');
+
+            // Mostrar botón toggle
+            hexInspectorToggle.classList.remove('hidden');
+
+            hexInspectorToggle.addEventListener('click', () => {
+                hexInspectorContainer.classList.toggle('hidden');
+                // Si se acaba de abrir y hay un mensaje pendiente
+                if (!hexInspectorContainer.classList.contains('hidden') && hexInspectorContainer._lastMsg) {
+                    updateHexInspector(hexInspectorContainer._lastMsg);
+                    hexInspectorContainer._lastMsg = null;
+                }
+            });
+            hexInspectorClose.addEventListener('click', () => {
+                hexInspectorContainer.classList.add('hidden');
+            });
+
+            function updateHexInspector(msg) {
+                const raw = msg.raw ?? null;
+                const msgType = msg.payload?.type ?? 'UNKNOWN';
+                const rawType = msg.payload?.rawType ?? '??';
+                const hex = raw ? String(raw).toLowerCase() : null;
+
+                // Título
+                hexInspectorTitle.textContent = `${msgType} (0x${Number(rawType).toString(16).padStart(2,'0').toUpperCase()})`;
+
+                // ---- Hex Viewer ----
+                hexViewerPane.innerHTML = '';
+                if (!hex) {
+                    hexViewerPane.textContent = 'Sin hex crudo disponible (JSON exportado sin campo raw)';
+                    fieldsTableBody.innerHTML = '<tr><td colspan="4" style="color:#666;padding:4px">Sin datos</td></tr>';
+                    return;
+                }
+
+                const bytes = [];
+                for (let i = 0; i < hex.length; i += 2) {
+                    bytes.push(hex.substring(i, i + 2));
+                }
+
+                bytes.forEach((b, idx) => {
+                    const span = document.createElement('span');
+                    span.className = `hex-byte${idx < HEADER_BYTES ? ' header-byte' : ''}`;
+                    span.textContent = b.toUpperCase();
+                    span.dataset.byteIdx = idx;
+                    span.title = `Byte ${idx}`;
+                    hexViewerPane.appendChild(span);
+                });
+
+                // ---- Tabla de campos ----
+                fieldsTableBody.innerHTML = '';
+                const schema = PAYLOAD_SCHEMAS[msgType];
+                if (!schema) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td colspan="4" style="color:#666;padding:4px">Sin schema para ${msgType}</td>`;
+                    fieldsTableBody.appendChild(tr);
+                    return;
+                }
+
+                // Expandir cards[] para MSG_DRAW
+                const fields = [...schema];
+                if (msgType === 'MSG_DRAW' && msg.payload?.count > 0) {
+                    for (let i = 0; i < msg.payload.count; i++) {
+                        fields.push({ name: `cards[${i}].code`,     start: 5 + i * 8, length: 4, type: 'UInt32LE' });
+                        fields.push({ name: `cards[${i}].position`, start: 9 + i * 8, length: 4, type: 'UInt32LE' });
+                    }
+                }
+
+                fields.forEach((field) => {
+                    const absStart = HEADER_BYTES + field.start;
+                    const byteSlice = bytes.slice(absStart, absStart + field.length).join('');
+                    const val = byteSlice ? `0x${byteSlice.toUpperCase()}` : '-';
+
+                    const tr = document.createElement('tr');
+                    tr.style.cssText = 'cursor:default;transition:background 0.1s;';
+                    tr.dataset.fieldStart = absStart;
+                    tr.dataset.fieldEnd = absStart + field.length - 1;
+                    tr.innerHTML = `
+                        <td style="padding:2px 6px;color:#c2bed3;">${field.name}</td>
+                        <td style="padding:2px 6px;color:#fff;">${val}</td>
+                        <td style="padding:2px 6px;color:#666;">+${field.start}</td>
+                        <td style="padding:2px 6px;color:#666;">${field.length}B</td>
+                    `;
+                    fieldsTableBody.appendChild(tr);
+                });
+
+                // ---- Correlación bidireccional ----
+                function clearHl() {
+                    hexViewerPane.querySelectorAll('.hex-byte.hl').forEach(el => el.classList.remove('hl'));
+                    fieldsTableBody.querySelectorAll('tr.hl-row').forEach(el => el.classList.remove('hl-row'));
+                }
+
+                // Hover en fila → resalta bytes
+                fieldsTableBody.querySelectorAll('tr').forEach((tr) => {
+                    if (!tr.dataset.fieldStart) return;
+                    tr.addEventListener('mouseenter', () => {
+                        clearHl();
+                        tr.classList.add('hl-row');
+                        const s = Number(tr.dataset.fieldStart);
+                        const e = Number(tr.dataset.fieldEnd);
+                        hexViewerPane.querySelectorAll('.hex-byte').forEach((b) => {
+                            const idx = Number(b.dataset.byteIdx);
+                            if (idx >= s && idx <= e) b.classList.add('hl');
+                        });
+                    });
+                    tr.addEventListener('mouseleave', clearHl);
+                });
+
+                // Hover en byte → resalta fila correspondiente
+                hexViewerPane.querySelectorAll('.hex-byte').forEach((b) => {
+                    b.addEventListener('mouseenter', () => {
+                        clearHl();
+                        const idx = Number(b.dataset.byteIdx);
+                        let matched = false;
+                        fieldsTableBody.querySelectorAll('tr').forEach((tr) => {
+                            if (!tr.dataset.fieldStart) return;
+                            const s = Number(tr.dataset.fieldStart);
+                            const e = Number(tr.dataset.fieldEnd);
+                            if (idx >= s && idx <= e) {
+                                tr.classList.add('hl-row');
+                                matched = true;
+                            }
+                        });
+                        if (matched) b.classList.add('hl');
+                    });
+                    b.addEventListener('mouseleave', clearHl);
+                });
+            }
+
+            window.addEventListener('message', (event) => {
+                const data = event.data;
+                if (!data || !data.type) return;
+
+                if (data.type === 'REPLAY_MESSAGE') {
+                    const msg = data.message;
+                    replayMessageCount++;
+
+                    if (!msg || !msg.type) {
+                        console.warn(`Replay mensaje ${replayMessageCount}: datos inválidos`, msg);
+                        return;
+                    }
+
+                    console.log(`Replay ${replayMessageCount}: ${msg.type}`, msg);
+
+                    try {
+                        handleEventData({
+                            message: msg.type,
+                            payload: msg.payload
+                        });
+                        renderState();
+
+                        // Actualizar inspector hex si está abierto
+                        if (!hexInspectorContainer.classList.contains('hidden')) {
+                            updateHexInspector(msg);
+                        } else {
+                            // Guardar para mostrar si el usuario abre el inspector después
+                            hexInspectorContainer._lastMsg = msg;
+                        }
+
+                        // Debug: mostrar el estado del field después de procesar
+                        if (replayMessageCount % 5 === 0) {
+                            console.log(`[DEBUG ${replayMessageCount}] state.field:`, Object.keys(state.field || {}).length, 'cartas');
+                            console.log(`[DEBUG ${replayMessageCount}] state.hands[0]:`, (state.hands[0] || []).length, 'state.hands[1]:', (state.hands[1] || []).length);
+                        }
+                        console.log(`✓ Mensaje ${replayMessageCount} procesado`);
+                    } catch (err) {
+                        console.error(`✗ Error procesando mensaje ${replayMessageCount}:`, err);
+                        appendLog(`❌ Error en replay: ${err.message}`);
+                    }
+                }
+            });
+
+            console.log('✅ Listener de postMessage para replay activado');
+        }
+
     </script>
 </body>
 
