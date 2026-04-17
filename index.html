@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enviar ID a la API</title>
+</head>
+<body>
+    <h1>Enviar ID a la API</h1>
+    <form id="idForm">
+        <label for="idInput">ID:</label>
+        <input type="text" id="idInput" name="id">
+        <button type="submit">Enviar</button>
+    </form>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('idForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const id = document.getElementById('idInput').value;
+            const response = await fetch('http://localhost:3000/api/idroom', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: id })
+            });
+            const result = await response.text();
+            document.getElementById('result').innerText = result;
+        });
+    </script>
+</body>
+</html>
+
