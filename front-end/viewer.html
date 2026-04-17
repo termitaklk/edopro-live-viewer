@@ -4500,6 +4500,255 @@
         if (replayModeActive) {
             let replayMessageCount = 0;
 
+            // ============ QUERY CONSTANTS ============
+            const QUERY_CODE = 0x1;
+            const QUERY_POSITION = 0x2;
+            const QUERY_TYPE = 0x8;
+            const QUERY_LEVEL = 0x10;
+            const QUERY_RANK = 0x20;
+            const QUERY_ATTRIBUTE = 0x40;
+            const QUERY_RACE = 0x80;
+            const QUERY_ATTACK = 0x100;
+            const QUERY_DEFENSE = 0x200;
+            const QUERY_BASE_ATTACK = 0x400;
+            const QUERY_BASE_DEFENSE = 0x800;
+            const QUERY_REASON = 0x1000;
+            const QUERY_END = 0x80000000;
+
+            // ============ BUFFER READER ============
+            function createReader(hexStr) {
+                const bytes = [];
+                for (let i = 0; i < hexStr.length; i += 2) {
+                    bytes.push(parseInt(hexStr.substr(i, 2), 16));
+                }
+                const view = new DataView(new Uint8Array(bytes).buffer);
+                return {
+                    bytes,
+                    view,
+                    offset: 0,
+                    remaining() {
+                        return Math.max(0, this.bytes.length - this.offset);
+                    },
+                    canRead(size) {
+                        return this.offset + size <= this.bytes.length;
+                    },
+                    readUInt8() {
+                        if (!this.canRead(1)) return null;
+                        const value = this.view.getUint8(this.offset);
+                        this.offset += 1;
+                        return value;
+                    },
+                    readUInt16LE() {
+                        if (!this.canRead(2)) return null;
+                        const value = this.view.getUint16(this.offset, true);
+                        this.offset += 2;
+                        return value;
+                    },
+                    readUInt32LE() {
+                        if (!this.canRead(4)) return null;
+                        const value = this.view.getUint32(this.offset, true);
+                        this.offset += 4;
+                        return value;
+                    },
+                    readInt32LE() {
+                        if (!this.canRead(4)) return null;
+                        const value = this.view.getInt32(this.offset, true);
+                        this.offset += 4;
+                        return value;
+                    },
+                    readBuffer(size) {
+                        if (!this.canRead(size)) return null;
+                        const result = this.bytes.slice(this.offset, this.offset + size);
+                        this.offset += size;
+                        return result;
+                    },
+                    skip(size) {
+                        this.offset = Math.min(this.bytes.length, this.offset + size);
+                    },
+                };
+            }
+
+            // ============ QUERY BLOCK PARSER ============
+            function parseQueryBlockPayload(flag, reader) {
+                const result = {};
+                const blockStart = reader.offset;
+
+                if (flag === QUERY_CODE) {
+                    result.code = reader.readUInt32LE();
+                } else if (flag === QUERY_POSITION) {
+                    result.position = reader.readUInt32LE();
+                } else if (flag === QUERY_TYPE) {
+                    result.cardType = reader.readUInt32LE();
+                } else if (flag === QUERY_LEVEL) {
+                    result.level = reader.readUInt32LE();
+                } else if (flag === QUERY_RANK) {
+                    result.rank = reader.readUInt32LE();
+                } else if (flag === QUERY_ATTRIBUTE) {
+                    result.attribute = reader.readUInt32LE();
+                } else if (flag === QUERY_RACE) {
+                    const raceVal = reader.view.getBigUint64(reader.offset, true);
+                    reader.offset += 8;
+                    result.race = Number(raceVal);
+                } else if (flag === QUERY_ATTACK) {
+                    result.attack = reader.readInt32LE();
+                } else if (flag === QUERY_DEFENSE) {
+                    result.defense = reader.readInt32LE();
+                } else if (flag === QUERY_BASE_ATTACK) {
+                    result.baseAttack = reader.readInt32LE();
+                } else if (flag === QUERY_BASE_DEFENSE) {
+                    result.baseDefense = reader.readInt32LE();
+                } else if (flag === QUERY_REASON) {
+                    result.reason = reader.readUInt32LE();
+                }
+
+                result.bytesRead = reader.offset - blockStart;
+                return result;
+            }
+
+            // ============ QUERY PARSER ============
+            function parseQuery(reader) {
+                const startOffset = reader.offset;
+                const result = {
+                    flags: 0,
+                    code: null,
+                    position: null,
+                    attack: null,
+                    defense: null,
+                    level: null,
+                    rank: null,
+                    cardType: null,
+                    attribute: null,
+                    race: null,
+                    blocks: [],
+                };
+
+                let blockCount = 0;
+                while (reader.remaining() >= 2 && blockCount < 128) {
+                    const blockStart = reader.offset;
+                    const size = reader.readUInt16LE();
+
+                    if (size === null || size === undefined) break;
+                    if (size === 0) {
+                        result.onfieldSkipped = true;
+                        break;
+                    }
+
+                    const flag = reader.readUInt32LE();
+                    if (flag === null) break;
+
+                    const payloadSize = Math.max(0, size - 4);
+                    const flagName = getFlagName(flag);
+                    const blockResult = {
+                        offset: blockStart,
+                        size,
+                        flag: `0x${flag.toString(16).toUpperCase().padStart(8, '0')}`,
+                        flagName,
+                        payloadSize,
+                    };
+
+                    if (payloadSize > 0 && reader.canRead(payloadSize)) {
+                        const hexPayload = reader.readBuffer(payloadSize);
+                        blockResult.hexPayload = hexPayload.map(b => b.toString(16).padStart(2, '0')).join('');
+
+                        // Parse field
+                        const subReader = createReader(blockResult.hexPayload);
+                        const parsed = parseQueryBlockPayload(flag, subReader);
+                        Object.assign(blockResult, parsed);
+                    } else if (payloadSize > 0) {
+                        result.truncated = true;
+                        break;
+                    }
+
+                    result.blocks.push(blockResult);
+                    result.flags |= flag;
+
+                    // Update top-level result
+                    if (blockResult.code !== undefined) result.code = blockResult.code;
+                    if (blockResult.position !== undefined) result.position = blockResult.position;
+                    if (blockResult.attack !== undefined) result.attack = blockResult.attack;
+                    if (blockResult.defense !== undefined) result.defense = blockResult.defense;
+                    if (blockResult.level !== undefined) result.level = blockResult.level;
+                    if (blockResult.rank !== undefined) result.rank = blockResult.rank;
+                    if (blockResult.cardType !== undefined) result.cardType = blockResult.cardType;
+                    if (blockResult.attribute !== undefined) result.attribute = blockResult.attribute;
+                    if (blockResult.race !== undefined) result.race = blockResult.race;
+
+                    if (flag === QUERY_END) break;
+                    blockCount += 1;
+                    if (reader.offset <= blockStart) {
+                        result.noProgress = true;
+                        break;
+                    }
+                }
+
+                result.bytesRead = reader.offset - startOffset;
+                result.blockCount = blockCount;
+                return result;
+            }
+
+            // ============ MSG_UPDATE_DATA PARSER ============
+            function parseUpdateDataPayload(hexStr) {
+                const reader = createReader(hexStr);
+                if (reader.remaining() < 6) return null;
+
+                const player = reader.readUInt8();
+                const location = reader.readUInt8();
+                const totalSize = reader.readUInt32LE();
+                const cards = [];
+                let sequence = 0;
+
+                const queryStreamStart = reader.offset;
+                const bytesBudget = Math.min(Number(totalSize), reader.remaining());
+                const budgetEnd = queryStreamStart + bytesBudget;
+
+                while (reader.offset < budgetEnd && cards.length < 512) {
+                    const cardStart = reader.offset;
+                    const query = parseQuery(reader);
+                    const consumed = reader.offset - cardStart;
+
+                    if (consumed <= 0 || query?.noProgress) break;
+
+                    cards.push({
+                        sequence,
+                        offset: cardStart,
+                        bytesRead: consumed,
+                        ...query,
+                    });
+                    sequence += 1;
+
+                    if (query?.truncated) break;
+                }
+
+                return {
+                    player,
+                    location,
+                    totalSize,
+                    queryStreamStart,
+                    bytesBudget,
+                    cards,
+                    cardCount: cards.length,
+                };
+            }
+
+            function getFlagName(flag) {
+                switch(flag) {
+                    case QUERY_CODE: return 'QUERY_CODE';
+                    case QUERY_POSITION: return 'QUERY_POSITION';
+                    case QUERY_TYPE: return 'QUERY_TYPE';
+                    case QUERY_LEVEL: return 'QUERY_LEVEL';
+                    case QUERY_RANK: return 'QUERY_RANK';
+                    case QUERY_ATTRIBUTE: return 'QUERY_ATTRIBUTE';
+                    case QUERY_RACE: return 'QUERY_RACE';
+                    case QUERY_ATTACK: return 'QUERY_ATTACK';
+                    case QUERY_DEFENSE: return 'QUERY_DEFENSE';
+                    case QUERY_BASE_ATTACK: return 'QUERY_BASE_ATTACK';
+                    case QUERY_BASE_DEFENSE: return 'QUERY_BASE_DEFENSE';
+                    case QUERY_REASON: return 'QUERY_REASON';
+                    case QUERY_END: return 'QUERY_END';
+                    default: return `0x${flag.toString(16).toUpperCase()}`;
+                }
+            }
+
             // ============ HEX INSPECTOR SETUP ============
             const hexInspectorContainer = document.getElementById('hexInspectorContainer');
             const hexInspectorToggle = document.getElementById('hexInspectorToggle');
@@ -4556,40 +4805,176 @@
 
                 // ---- Tabla de campos ----
                 fieldsTableBody.innerHTML = '';
-                const schema = PAYLOAD_SCHEMAS[msgType];
-                if (!schema) {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `<td colspan="4" style="color:#666;padding:4px">Sin schema para ${msgType}</td>`;
-                    fieldsTableBody.appendChild(tr);
-                    return;
-                }
 
-                // Expandir cards[] para MSG_DRAW
-                const fields = [...schema];
-                if (msgType === 'MSG_DRAW' && msg.payload?.count > 0) {
-                    for (let i = 0; i < msg.payload.count; i++) {
-                        fields.push({ name: `cards[${i}].code`,     start: 5 + i * 8, length: 4, type: 'UInt32LE' });
-                        fields.push({ name: `cards[${i}].position`, start: 9 + i * 8, length: 4, type: 'UInt32LE' });
+                // Handler especial para MSG_UPDATE_DATA
+                if (msgType === 'MSG_UPDATE_DATA') {
+                    const hexPayload = hex.substring(HEADER_BYTES * 2); // Skip header
+                    const parsed = parseUpdateDataPayload(hexPayload);
+
+                    if (!parsed) {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td colspan="4" style="color:#f00;">Error parseando MSG_UPDATE_DATA</td>`;
+                        fieldsTableBody.appendChild(tr);
+                        return;
                     }
-                }
 
-                fields.forEach((field) => {
-                    const absStart = HEADER_BYTES + field.start;
-                    const byteSlice = bytes.slice(absStart, absStart + field.length).join('');
-                    const val = byteSlice ? `0x${byteSlice.toUpperCase()}` : '-';
+                    // Header fields
+                    const headerFields = [
+                        { name: 'player', offset: 0, length: 1, value: `${parsed.player}` },
+                        { name: 'location', offset: 1, length: 1, value: `0x${parsed.location.toString(16).padStart(2, '0').toUpperCase()}` },
+                        { name: 'totalSize', offset: 2, length: 4, value: `${parsed.totalSize}` },
+                    ];
 
-                    const tr = document.createElement('tr');
-                    tr.style.cssText = 'cursor:default;transition:background 0.1s;';
-                    tr.dataset.fieldStart = absStart;
-                    tr.dataset.fieldEnd = absStart + field.length - 1;
-                    tr.innerHTML = `
-                        <td style="padding:2px 6px;color:#c2bed3;">${field.name}</td>
-                        <td style="padding:2px 6px;color:#fff;">${val}</td>
-                        <td style="padding:2px 6px;color:#666;">+${field.start}</td>
-                        <td style="padding:2px 6px;color:#666;">${field.length}B</td>
+                    headerFields.forEach((field) => {
+                        const absStart = HEADER_BYTES + field.offset;
+                        const tr = document.createElement('tr');
+                        tr.style.cssText = 'cursor:default;transition:background 0.1s;background:#1a2a3a;';
+                        tr.dataset.fieldStart = absStart;
+                        tr.dataset.fieldEnd = absStart + field.length - 1;
+                        tr.innerHTML = `
+                            <td style="padding:2px 6px;color:#16c784;font-weight:bold;">${field.name}</td>
+                            <td style="padding:2px 6px;color:#fff;">${field.value}</td>
+                            <td style="padding:2px 6px;color:#666;">+${field.offset}</td>
+                            <td style="padding:2px 6px;color:#666;">${field.length}B</td>
+                        `;
+                        fieldsTableBody.appendChild(tr);
+                    });
+
+                    // Separator
+                    const sepTr = document.createElement('tr');
+                    sepTr.innerHTML = `<td colspan="4" style="padding:2px;border-top:1px solid #2f3945;"></td>`;
+                    fieldsTableBody.appendChild(sepTr);
+
+                    // Cards
+                    parsed.cards.forEach((card, cardIdx) => {
+                        const cardHeaderTr = document.createElement('tr');
+                        cardHeaderTr.style.cssText = 'background:#0d2a1a;cursor:default;';
+                        const cardHeaderStart = HEADER_BYTES + card.offset;
+                        cardHeaderTr.dataset.fieldStart = cardHeaderStart;
+                        cardHeaderTr.dataset.fieldEnd = cardHeaderStart + card.bytesRead - 1;
+                        cardHeaderTr.innerHTML = `
+                            <td style="padding:2px 6px;color:#51cf66;">Card ${card.sequence}</td>
+                            <td style="padding:2px 6px;color:#aaa;">${card.blockCount || 0} blocks</td>
+                            <td style="padding:2px 6px;color:#666;">@${card.offset}</td>
+                            <td style="padding:2px 6px;color:#666;">${card.bytesRead}B</td>
+                        `;
+                        fieldsTableBody.appendChild(cardHeaderTr);
+
+                        // Card details
+                        if (card.code !== null || card.position !== null || card.level !== null) {
+                            if (card.code !== null) {
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `
+                                    <td style="padding:2px 6px;color:#c2bed3;">  code</td>
+                                    <td style="padding:2px 6px;color:#fff;">0x${card.code.toString(16).padStart(8, '0').toUpperCase()}</td>
+                                    <td colspan="2" style="padding:2px 6px;color:#666;">${card.code}</td>
+                                `;
+                                fieldsTableBody.appendChild(tr);
+                            }
+                            if (card.position !== null) {
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `
+                                    <td style="padding:2px 6px;color:#c2bed3;">  position</td>
+                                    <td style="padding:2px 6px;color:#fff;">0x${card.position.toString(16).padStart(8, '0').toUpperCase()}</td>
+                                    <td colspan="2" style="padding:2px 6px;color:#666;">${card.position}</td>
+                                `;
+                                fieldsTableBody.appendChild(tr);
+                            }
+                            if (card.level !== null) {
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `
+                                    <td style="padding:2px 6px;color:#c2bed3;">  level</td>
+                                    <td style="padding:2px 6px;color:#fff;">0x${card.level.toString(16).padStart(2, '0').toUpperCase()}</td>
+                                    <td colspan="2" style="padding:2px 6px;color:#666;">${card.level}</td>
+                                `;
+                                fieldsTableBody.appendChild(tr);
+                            }
+                            if (card.attack !== null || card.defense !== null) {
+                                if (card.attack !== null) {
+                                    const tr = document.createElement('tr');
+                                    tr.innerHTML = `
+                                        <td style="padding:2px 6px;color:#c2bed3;">  attack</td>
+                                        <td style="padding:2px 6px;color:#fff;">${card.attack}</td>
+                                        <td colspan="2" style="padding:2px 6px;color:#666;"></td>
+                                    `;
+                                    fieldsTableBody.appendChild(tr);
+                                }
+                                if (card.defense !== null) {
+                                    const tr = document.createElement('tr');
+                                    tr.innerHTML = `
+                                        <td style="padding:2px 6px;color:#c2bed3;">  defense</td>
+                                        <td style="padding:2px 6px;color:#fff;">${card.defense}</td>
+                                        <td colspan="2" style="padding:2px 6px;color:#666;"></td>
+                                    `;
+                                    fieldsTableBody.appendChild(tr);
+                                }
+                            }
+                        }
+
+                        // Blocks details
+                        if (card.blocks && card.blocks.length > 0) {
+                            card.blocks.forEach((block, blockIdx) => {
+                                const blockTr = document.createElement('tr');
+                                blockTr.style.cssText = 'background:#1a1a2e;font-size:10px;';
+                                const blockStart = HEADER_BYTES + block.offset;
+                                blockTr.dataset.fieldStart = blockStart;
+                                blockTr.dataset.fieldEnd = blockStart + block.size - 1;
+                                blockTr.innerHTML = `
+                                    <td style="padding:2px 6px;color:#ffd43b;">  ${block.flagName}</td>
+                                    <td style="padding:2px 6px;color:#999;">${block.flag}</td>
+                                    <td style="padding:2px 6px;color:#666;">+${block.offset}</td>
+                                    <td style="padding:2px 6px;color:#666;">${block.size}B</td>
+                                `;
+                                fieldsTableBody.appendChild(blockTr);
+                            });
+                        }
+                    });
+
+                    // Información resumida
+                    const infoTr = document.createElement('tr');
+                    infoTr.style.cssText = 'background:#0d111c;border-top:1px solid #2f3945;';
+                    infoTr.innerHTML = `
+                        <td colspan="4" style="padding:4px 6px;color:#888;font-size:11px;">
+                            Total: ${parsed.cardCount} cartas, ${parsed.bytesBudget} bytes
+                        </td>
                     `;
-                    fieldsTableBody.appendChild(tr);
-                });
+                    fieldsTableBody.appendChild(infoTr);
+                } else {
+                    // Fallback: usar PAYLOAD_SCHEMAS para otros mensajes
+                    const schema = PAYLOAD_SCHEMAS[msgType];
+                    if (!schema) {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td colspan="4" style="color:#666;padding:4px">Sin schema para ${msgType}</td>`;
+                        fieldsTableBody.appendChild(tr);
+                        return;
+                    }
+
+                    const fields = [...schema];
+                    if (msgType === 'MSG_DRAW' && msg.payload?.count > 0) {
+                        for (let i = 0; i < msg.payload.count; i++) {
+                            fields.push({ name: `cards[${i}].code`,     start: 5 + i * 8, length: 4, type: 'UInt32LE' });
+                            fields.push({ name: `cards[${i}].position`, start: 9 + i * 8, length: 4, type: 'UInt32LE' });
+                        }
+                    }
+
+                    fields.forEach((field) => {
+                        const absStart = HEADER_BYTES + field.start;
+                        const byteSlice = bytes.slice(absStart, absStart + field.length).join('');
+                        const val = byteSlice ? `0x${byteSlice.toUpperCase()}` : '-';
+
+                        const tr = document.createElement('tr');
+                        tr.style.cssText = 'cursor:default;transition:background 0.1s;';
+                        tr.dataset.fieldStart = absStart;
+                        tr.dataset.fieldEnd = absStart + field.length - 1;
+                        tr.innerHTML = `
+                            <td style="padding:2px 6px;color:#c2bed3;">${field.name}</td>
+                            <td style="padding:2px 6px;color:#fff;">${val}</td>
+                            <td style="padding:2px 6px;color:#666;">+${field.start}</td>
+                            <td style="padding:2px 6px;color:#666;">${field.length}B</td>
+                        `;
+                        fieldsTableBody.appendChild(tr);
+                    });
+                }
 
                 // ---- Correlación bidireccional ----
                 function clearHl() {
