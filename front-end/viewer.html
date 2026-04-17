@@ -1292,6 +1292,7 @@
                                         <tr style="color:#16c784;border-bottom:1px solid #2f3945;">
                                             <th style="text-align:left;padding:2px 6px;">Campo</th>
                                             <th style="text-align:left;padding:2px 6px;">Valor</th>
+                                            <th style="text-align:left;padding:2px 6px;">Interpretación</th>
                                             <th style="text-align:left;padding:2px 6px;">Offset</th>
                                             <th style="text-align:left;padding:2px 6px;">Bytes</th>
                                         </tr>
@@ -1312,6 +1313,20 @@
                         font-family:monospace;font-size:11px;">
                         🔍 Inspeccionar Hex
                     </button>
+
+                    <!-- Historial de mensajes hex en live duel -->
+                    <div id="hexHistoryContainer" style="
+                        display:none;margin-bottom:10px;background:#0d111c;
+                        border:1px solid #2f3945;border-radius:4px;padding:6px;
+                        max-height:300px;overflow-y:auto;">
+                        <div style="color:#16c784;font-size:11px;font-weight:bold;margin-bottom:4px;">
+                            📡 Mensajes Hex Recibidos
+                        </div>
+                        <div id="hexHistoryList" style="
+                            font-size:10px;font-family:monospace;color:#c2bed3;
+                            max-height:280px;overflow-y:auto;"></div>
+                    </div>
+
                     <button id="downloadLogsButton" style="width: 100%; padding: 10px; margin-bottom: 10px; background: linear-gradient(135deg, #1a1a2e, #16c784); border: 2px solid #16c784; color: #fff; cursor: pointer; border-radius: 6px; font-size: 12px; font-weight: bold; box-shadow: 0 0 10px rgba(22, 199, 132, 0.5); transition: all 0.3s;">📥 Descargar Logs</button>
                     <div id="liveMeta" class="meta">Waiting for events...</div>
                     <div id="lastCardId">Last valid card id: none</div>
@@ -1596,17 +1611,8 @@
             initialState: null,
 
             captureMessage(type, payload) {
-                if (!this.enabled) return;
-                if (this.initialState === null) {
-                    this.initialState = JSON.parse(JSON.stringify(state));
-                }
-                this.messages.push({
-                    timestamp: Date.now() - this.startTime,
-                    type,
-                    payload: JSON.parse(JSON.stringify(payload)),
-                    stateAfter: JSON.parse(JSON.stringify(state)),
-                    raw: payload.payloadHex ?? null,
-                });
+                // Deprecated: captura ahora se hace en handleEventData DESPUÉS de procesar
+                // Esta función se mantiene para compatibilidad hacia atrás
             },
 
             download() {
@@ -1623,6 +1629,8 @@
                 a.download = `duel-${new Date().toISOString()}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
+                console.log(`✅ Descargados ${this.messages.length} mensajes capturados`);
+                appendLog(`📥 Descargados ${this.messages.length} mensajes de duelo`);
             },
         };
 
@@ -3487,10 +3495,10 @@
         });
 
         function handleEventData(data) {
-            // Capturar mensaje para análisis
-            if (data.message === 'game_msg' && data.payload?.type) {
-                // Capturar con ambos: el tipo de mensaje ('game_msg') y el payload
-                duelCapture.captureMessage(data.message, data.payload);
+            // Guardar initialState cuando se inicia la conexión de duelo
+            if (data.message === 'connection_open' && duelCapture.initialState === null) {
+                duelCapture.initialState = JSON.parse(JSON.stringify(state));
+                console.log('📊 Captura iniciada. Estado inicial guardado.');
             }
 
             if (data.message === 'connection_open') {
@@ -4334,6 +4342,31 @@
                     updateTopBar();
                 }
             }
+
+            // Capturar mensaje DESPUÉS de procesarlo (para que stateAfter refleje el estado real)
+            if (data.message === 'game_msg' && data.payload?.type && duelCapture.enabled) {
+                duelCapture.messages.push({
+                    timestamp: Date.now() - duelCapture.startTime,
+                    type: data.message,
+                    payload: JSON.parse(JSON.stringify(data.payload)),
+                    stateAfter: JSON.parse(JSON.stringify(state)),
+                    raw: data.payload.payloadHex ?? null,
+                });
+            }
+
+            // Agregar a historial hex en LIVE duel (modo streaming, no replay)
+            if (!replayModeActive && data.message === 'game_msg' && data.payload?.type && data.payload?.payloadHex) {
+                const hexStr = data.payload.payloadHex.toLowerCase();
+                hexMessageHistory.push({
+                    index: hexMessageHistory.length,
+                    type: data.payload.type,
+                    hex: hexStr,
+                    timestamp: Date.now()
+                });
+                // Mostrar el historial
+                hexHistoryContainer.style.display = 'block';
+                updateHexHistory();
+            }
         }
 
         events.addEventListener('error', function () {
@@ -4749,6 +4782,64 @@
                 }
             }
 
+            function interpretValue(fieldName, value) {
+                if (value === null || value === undefined) return '';
+
+                const str = String(value);
+
+                // Interpretaciones por nombre de campo
+                if (fieldName.includes('player')) {
+                    return ['Jugador 0', 'Jugador 1'][Number(value)] || `P${value}`;
+                }
+
+                if (fieldName === 'location' || fieldName.includes('Location')) {
+                    const loc = Number(value);
+                    const locations = {
+                        0x01: 'DECK', 0x02: 'HAND', 0x04: 'FIELD',
+                        0x08: 'GRAVEYARD', 0x10: 'BANISHED', 0x20: 'EXTRA'
+                    };
+                    return locations[loc] || `LOC_${loc}`;
+                }
+
+                if (fieldName === 'phase' || fieldName.includes('Phase')) {
+                    const phase = Number(value);
+                    const phases = {
+                        1: 'DRAW', 2: 'STANDBY', 4: 'MAIN1',
+                        8: 'BP', 16: 'MAIN2', 32: 'END'
+                    };
+                    return phases[phase] || `PHASE_${phase}`;
+                }
+
+                if (fieldName.includes('code')) {
+                    const code = Number(value);
+                    return code > 0 ? `Card #${code}` : '(empty)';
+                }
+
+                if (fieldName.includes('position')) {
+                    const pos = Number(value) & 0xFF;
+                    const positions = {
+                        0: 'FACEUP', 1: 'FACEDOWN', 4: 'FACEUP_ATK', 8: 'FACEDOWN_ATK'
+                    };
+                    return positions[pos] || `POS_${pos}`;
+                }
+
+                if (fieldName === 'reason' || fieldName.includes('Reason')) {
+                    const reason = Number(value);
+                    return `REASON_${reason}`;
+                }
+
+                if (fieldName.includes('type')) {
+                    const type = Number(value);
+                    const typeNames = {
+                        1: 'MONSTER', 2: 'SPELL', 4: 'TRAP', 8: 'FUSION',
+                        16: 'SYNCHRO', 32: 'XYZ', 64: 'PENDULUM', 128: 'LINK'
+                    };
+                    return typeNames[type] || `TYPE_${type}`;
+                }
+
+                return '';
+            }
+
             // ============ HEX INSPECTOR SETUP ============
             const hexInspectorContainer = document.getElementById('hexInspectorContainer');
             const hexInspectorToggle = document.getElementById('hexInspectorToggle');
@@ -4756,12 +4847,29 @@
             const hexInspectorTitle = document.getElementById('hexInspectorTitle');
             const hexViewerPane = document.getElementById('hexViewerPane');
             const fieldsTableBody = document.getElementById('fieldsTableBody');
+            const hexHistoryContainer = document.getElementById('hexHistoryContainer');
+            const hexHistoryList = document.getElementById('hexHistoryList');
+            let hexMessageHistory = [];
 
             // Mostrar botón toggle
             hexInspectorToggle.classList.remove('hidden');
 
+            // Restaurar estado del inspector si estaba abierto (para modo replay)
+            if (replayModeActive && localStorage.getItem('hexInspectorOpen') === 'true') {
+                hexInspectorContainer.classList.remove('hidden');
+                localStorage.removeItem('hexInspectorOpen');
+            }
+
             hexInspectorToggle.addEventListener('click', () => {
                 hexInspectorContainer.classList.toggle('hidden');
+                // Guardar estado para modo replay
+                if (replayModeActive) {
+                    if (!hexInspectorContainer.classList.contains('hidden')) {
+                        localStorage.setItem('hexInspectorOpen', 'true');
+                    } else {
+                        localStorage.removeItem('hexInspectorOpen');
+                    }
+                }
                 // Si se acaba de abrir y hay un mensaje pendiente
                 if (!hexInspectorContainer.classList.contains('hidden') && hexInspectorContainer._lastMsg) {
                     updateHexInspector(hexInspectorContainer._lastMsg);
@@ -4770,6 +4878,9 @@
             });
             hexInspectorClose.addEventListener('click', () => {
                 hexInspectorContainer.classList.add('hidden');
+                if (replayModeActive) {
+                    localStorage.removeItem('hexInspectorOpen');
+                }
             });
 
             function updateHexInspector(msg) {
@@ -4831,9 +4942,11 @@
                         tr.style.cssText = 'cursor:default;transition:background 0.1s;background:#1a2a3a;';
                         tr.dataset.fieldStart = absStart;
                         tr.dataset.fieldEnd = absStart + field.length - 1;
+                        const interp = interpretValue(field.name, field.value);
                         tr.innerHTML = `
                             <td style="padding:2px 6px;color:#16c784;font-weight:bold;">${field.name}</td>
                             <td style="padding:2px 6px;color:#fff;">${field.value}</td>
+                            <td style="padding:2px 6px;color:#999;">${interp}</td>
                             <td style="padding:2px 6px;color:#666;">+${field.offset}</td>
                             <td style="padding:2px 6px;color:#666;">${field.length}B</td>
                         `;
@@ -4842,7 +4955,7 @@
 
                     // Separator
                     const sepTr = document.createElement('tr');
-                    sepTr.innerHTML = `<td colspan="4" style="padding:2px;border-top:1px solid #2f3945;"></td>`;
+                    sepTr.innerHTML = `<td colspan="5" style="padding:2px;border-top:1px solid #2f3945;"></td>`;
                     fieldsTableBody.appendChild(sepTr);
 
                     // Cards
@@ -4867,7 +4980,8 @@
                                 tr.innerHTML = `
                                     <td style="padding:2px 6px;color:#c2bed3;">  code</td>
                                     <td style="padding:2px 6px;color:#fff;">0x${card.code.toString(16).padStart(8, '0').toUpperCase()}</td>
-                                    <td colspan="2" style="padding:2px 6px;color:#666;">${card.code}</td>
+                                    <td style="padding:2px 6px;color:#999;">${interpretValue('code', card.code)}</td>
+                                    <td colspan="2" style="padding:2px 6px;color:#666;"></td>
                                 `;
                                 fieldsTableBody.appendChild(tr);
                             }
@@ -4876,7 +4990,8 @@
                                 tr.innerHTML = `
                                     <td style="padding:2px 6px;color:#c2bed3;">  position</td>
                                     <td style="padding:2px 6px;color:#fff;">0x${card.position.toString(16).padStart(8, '0').toUpperCase()}</td>
-                                    <td colspan="2" style="padding:2px 6px;color:#666;">${card.position}</td>
+                                    <td style="padding:2px 6px;color:#999;">${interpretValue('position', card.position)}</td>
+                                    <td colspan="2" style="padding:2px 6px;color:#666;"></td>
                                 `;
                                 fieldsTableBody.appendChild(tr);
                             }
@@ -4885,7 +5000,8 @@
                                 tr.innerHTML = `
                                     <td style="padding:2px 6px;color:#c2bed3;">  level</td>
                                     <td style="padding:2px 6px;color:#fff;">0x${card.level.toString(16).padStart(2, '0').toUpperCase()}</td>
-                                    <td colspan="2" style="padding:2px 6px;color:#666;">${card.level}</td>
+                                    <td style="padding:2px 6px;color:#999;">Lv ${card.level}</td>
+                                    <td colspan="2" style="padding:2px 6px;color:#666;"></td>
                                 `;
                                 fieldsTableBody.appendChild(tr);
                             }
@@ -4895,7 +5011,7 @@
                                     tr.innerHTML = `
                                         <td style="padding:2px 6px;color:#c2bed3;">  attack</td>
                                         <td style="padding:2px 6px;color:#fff;">${card.attack}</td>
-                                        <td colspan="2" style="padding:2px 6px;color:#666;"></td>
+                                        <td colspan="3" style="padding:2px 6px;color:#666;"></td>
                                     `;
                                     fieldsTableBody.appendChild(tr);
                                 }
@@ -4904,7 +5020,7 @@
                                     tr.innerHTML = `
                                         <td style="padding:2px 6px;color:#c2bed3;">  defense</td>
                                         <td style="padding:2px 6px;color:#fff;">${card.defense}</td>
-                                        <td colspan="2" style="padding:2px 6px;color:#666;"></td>
+                                        <td colspan="3" style="padding:2px 6px;color:#666;"></td>
                                     `;
                                     fieldsTableBody.appendChild(tr);
                                 }
@@ -4944,7 +5060,7 @@
                     const schema = PAYLOAD_SCHEMAS[msgType];
                     if (!schema) {
                         const tr = document.createElement('tr');
-                        tr.innerHTML = `<td colspan="4" style="color:#666;padding:4px">Sin schema para ${msgType}</td>`;
+                        tr.innerHTML = `<td colspan="5" style="color:#666;padding:4px">Sin schema para ${msgType}</td>`;
                         fieldsTableBody.appendChild(tr);
                         return;
                     }
@@ -4961,14 +5077,22 @@
                         const absStart = HEADER_BYTES + field.start;
                         const byteSlice = bytes.slice(absStart, absStart + field.length).join('');
                         const val = byteSlice ? `0x${byteSlice.toUpperCase()}` : '-';
+                        let numVal = null;
+                        try {
+                            if (field.length === 1) numVal = parseInt(byteSlice, 16);
+                            else if (field.length === 2) numVal = parseInt(byteSlice.match(/.{1,2}/g).reverse().join(''), 16);
+                            else if (field.length === 4) numVal = parseInt(byteSlice.match(/.{1,2}/g).reverse().join(''), 16);
+                        } catch(e) {}
 
                         const tr = document.createElement('tr');
                         tr.style.cssText = 'cursor:default;transition:background 0.1s;';
                         tr.dataset.fieldStart = absStart;
                         tr.dataset.fieldEnd = absStart + field.length - 1;
+                        const interp = numVal !== null ? interpretValue(field.name, numVal) : '';
                         tr.innerHTML = `
                             <td style="padding:2px 6px;color:#c2bed3;">${field.name}</td>
                             <td style="padding:2px 6px;color:#fff;">${val}</td>
+                            <td style="padding:2px 6px;color:#999;">${interp}</td>
                             <td style="padding:2px 6px;color:#666;">+${field.start}</td>
                             <td style="padding:2px 6px;color:#666;">${field.length}B</td>
                         `;
@@ -5019,6 +5143,43 @@
                 });
             }
 
+            function updateHexHistory() {
+                hexHistoryList.innerHTML = '';
+                const maxShow = 50;
+                const start = Math.max(0, hexMessageHistory.length - maxShow);
+
+                for (let i = start; i < hexMessageHistory.length; i++) {
+                    const msg = hexMessageHistory[i];
+                    const div = document.createElement('div');
+                    div.style.cssText = 'padding:2px 4px;margin:1px 0;background:#0a0e27;border-left:2px solid #2f3945;cursor:pointer;transition:all 0.1s;';
+                    div.title = msg.hex;
+
+                    const hexPreview = msg.hex.substring(0, 16) + (msg.hex.length > 16 ? '...' : '');
+                    div.textContent = `[${msg.index}] ${msg.type}: ${hexPreview}`;
+
+                    div.addEventListener('mouseenter', () => {
+                        div.style.background = '#1a1f2e';
+                        div.style.borderLeftColor = '#16c784';
+                    });
+                    div.addEventListener('mouseleave', () => {
+                        div.style.background = '#0a0e27';
+                        div.style.borderLeftColor = '#2f3945';
+                    });
+
+                    // Click para copiar al portapapeles
+                    div.addEventListener('click', () => {
+                        navigator.clipboard.writeText(msg.hex).then(() => {
+                            div.textContent = '✓ Copiado';
+                            setTimeout(() => {
+                                div.textContent = `[${msg.index}] ${msg.type}: ${hexPreview}`;
+                            }, 1500);
+                        });
+                    });
+
+                    hexHistoryList.appendChild(div);
+                }
+            }
+
             window.addEventListener('message', (event) => {
                 const data = event.data;
                 if (!data || !data.type) return;
@@ -5047,6 +5208,18 @@
                         } else {
                             // Guardar para mostrar si el usuario abre el inspector después
                             hexInspectorContainer._lastMsg = msg;
+                        }
+
+                        // Agregar a historial de mensajes hex
+                        if (msg.raw || msg.payload?.payloadHex) {
+                            const hexStr = (msg.raw || msg.payload?.payloadHex || '').toLowerCase();
+                            hexMessageHistory.push({
+                                index: replayMessageCount,
+                                type: msg.type,
+                                hex: hexStr,
+                                timestamp: msg.timestamp || Date.now()
+                            });
+                            updateHexHistory();
                         }
 
                         // Debug: mostrar el estado del field después de procesar

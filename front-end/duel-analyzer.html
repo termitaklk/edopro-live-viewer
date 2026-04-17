@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Duelos - EDOPro Visor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0e27;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #16c784; margin-bottom: 20px; }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 8px 16px;
+            background: #1a1a2e;
+            border: 1px solid #16c784;
+            color: #16c784;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        button:hover { background: #16c784; color: #0a0e27; }
+        input[type="file"] { padding: 8px; }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .panel {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+        .panel h2 {
+            color: #16c784;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .message-list {
+            list-style: none;
+        }
+        .message-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #0a0e27;
+            border-left: 3px solid #333;
+            cursor: pointer;
+            border-radius: 2px;
+            font-size: 12px;
+        }
+        .message-item:hover { background: #1a1a2e; border-left-color: #16c784; }
+        .message-item.active {
+            background: #16c784;
+            color: #0a0e27;
+            border-left-color: #fff;
+        }
+        .state-viewer {
+            font-size: 11px;
+            background: #0a0e27;
+            padding: 10px;
+            border-radius: 2px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .info-block {
+            background: #0a0e27;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 3px solid #16c784;
+            border-radius: 2px;
+            font-size: 12px;
+        }
+        .error { color: #ff6b6b; border-left-color: #ff6b6b; }
+        .success { color: #51cf66; border-left-color: #51cf66; }
+        .warning { color: #ffd43b; border-left-color: #ffd43b; }
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        input[type="range"] {
+            flex: 1;
+            min-width: 200px;
+        }
+        .step-info {
+            font-size: 12px;
+            color: #16c784;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Analizador de Duelos - EDOPro Visor</h1>
+
+        <div class="controls">
+            <input type="file" id="fileInput" accept=".json" placeholder="Cargar archivo de logs">
+            <button onclick="loadFile()">📂 Cargar Archivo</button>
+            <button onclick="downloadTemplate()">📋 Descargar Plantilla</button>
+        </div>
+
+        <div id="noFile" style="text-align: center; color: #666; padding: 40px;">
+            Carga un archivo JSON descargado desde el visor para comenzar el análisis
+        </div>
+
+        <div id="mainContent" style="display: none;">
+            <div class="controls-row">
+                <label for="messageSlider" style="min-width: 150px;">Mensaje:</label>
+                <input type="range" id="messageSlider" min="0" max="0" onchange="jumpToMessage(this.value)">
+                <span class="step-info" id="stepInfo">0/0</span>
+                <button onclick="prevMessage()">◀ Anterior</button>
+                <button onclick="nextMessage()">Siguiente ▶</button>
+                <button onclick="autoPlay()">▶️ Auto-play</button>
+            </div>
+
+            <div class="content">
+                <div class="panel">
+                    <h2>📝 Mensajes</h2>
+                    <ul class="message-list" id="messageList"></ul>
+                </div>
+
+                <div class="panel">
+                    <h2>ℹ️ Información del Mensaje</h2>
+                    <div id="messageInfo"></div>
+                </div>
+
+                <div class="panel">
+                    <h2>🎮 Estado Actual</h2>
+                    <div class="state-viewer" id="stateViewer"></div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <div class="panel">
+                    <h2>📊 Validaciones</h2>
+                    <div id="validations"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let duelData = null;
+        let currentMessageIndex = 0;
+        let autoPlayRunning = false;
+        let replayWindow = null;
+        let replayWindowReady = false;
+        let lastSyncedIndex = -1;
+
+        function loadFile() {
+            const input = document.getElementById('fileInput');
+            const file = input.files[0];
+            if (!file) return alert('Selecciona un archivo');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    duelData = JSON.parse(e.target.result);
+                    initializeAnalyzer();
+                    openReplayWindow();
+                } catch (err) {
+                    alert(`Error al parsear JSON: ${err.message}`);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function openReplayWindow() {
+            if (replayWindow) {
+                replayWindow.close();
+            }
+
+            // Guardar los datos en localStorage para que el visor los pueda leer
+            localStorage.setItem('duelReplayData', JSON.stringify(duelData));
+            localStorage.setItem('duelReplayMode', 'true');
+
+            // Abrir viewer.html - detectará automáticamente que está en replay mode
+            replayWindow = window.open('./viewer.html', 'replayViewer', 'width=1400,height=900');
+            replayWindowReady = true;
+            lastSyncedIndex = -1;
+
+            console.log('Ventana de replay abierta con', duelData.messages.length, 'mensajes');
+
+            // Esperar a que la ventana se cargue completamente y enviar todos los mensajes
+            setTimeout(() => {
+                if (replayWindow && !replayWindow.closed) {
+                    console.log('Enviando todos los mensajes al visor...');
+                    // Enviar TODOS los mensajes al visor para reconstruir el estado completo
+                    duelData.messages.forEach((msg, index) => {
+                        setTimeout(() => {
+                            if (replayWindow && !replayWindow.closed) {
+                                console.log(`Enviando mensaje ${index}: ${msg.type}`);
+                                replayWindow.postMessage({
+                                    type: 'REPLAY_MESSAGE',
+                                    message: msg
+                                }, '*');
+                            }
+                        }, index * 30); // 30ms entre mensajes
+                    });
+                    lastSyncedIndex = duelData.messages.length - 1;
+                }
+            }, 1000); // Esperar 1 segundo a que se cargue el visor
+        }
+
+        function initializeAnalyzer() {
+            document.getElementById('noFile').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+
+            const slider = document.getElementById('messageSlider');
+            slider.max = duelData.messages.length - 1;
+
+            renderMessageList();
+            jumpToMessage(0);
+        }
+
+        function renderMessageList() {
+            const list = document.getElementById('messageList');
+            list.innerHTML = '';
+
+            duelData.messages.forEach((msg, idx) => {
+                const item = document.createElement('li');
+                item.className = 'message-item';
+                item.textContent = `[${idx}] ${msg.type} @ ${msg.timestamp}ms`;
+                item.onclick = () => jumpToMessage(idx);
+                list.appendChild(item);
+            });
+        }
+
+        function jumpToMessage(index) {
+            index = parseInt(index);
+            if (index < 0 || index >= duelData.messages.length) return;
+
+            currentMessageIndex = index;
+            const msg = duelData.messages[index];
+
+            // Actualizar slider
+            document.getElementById('messageSlider').value = index;
+            document.getElementById('stepInfo').textContent = `${index + 1}/${duelData.messages.length}`;
+
+            // Marcar como activo
+            document.querySelectorAll('.message-item').forEach((item, i) => {
+                item.classList.toggle('active', i === index);
+            });
+
+            // Mostrar información del mensaje
+            showMessageInfo(msg, index);
+
+            // Mostrar estado
+            showStateAfter(msg);
+
+            // Validaciones
+            showValidations(msg, index);
+
+            // Sincronizar con la ventana de replay
+            syncReplayWindow(index);
+        }
+
+        function syncReplayWindow(targetIndex) {
+            if (!replayWindow || !replayWindowReady) return;
+
+            try {
+                // Si navegamos hacia atrás, reiniciar desde el principio
+                if (targetIndex < lastSyncedIndex) {
+                    console.log(`Reiniciando replay: ${targetIndex} < ${lastSyncedIndex}`);
+                    // Guardar estado del inspector antes de recargar
+                    const hexInspectorOpen = replayWindow.document.getElementById('hexInspectorContainer')?.classList.contains('hidden') === false;
+                    if (hexInspectorOpen) {
+                        localStorage.setItem('hexInspectorOpen', 'true');
+                    }
+                    // Recargar la ventana para resetear el estado
+                    replayWindow.location.reload();
+                    lastSyncedIndex = -1;
+
+                    // Después de recargar, esperar y enviar los mensajes nuevamente
+                    setTimeout(() => {
+                        syncReplayWindow(targetIndex);
+                    }, 500);
+                    return;
+                }
+
+                // Enviar solo los mensajes nuevos (desde lastSyncedIndex + 1 hasta targetIndex)
+                const messagesToSend = [];
+                for (let i = Math.max(0, lastSyncedIndex + 1); i <= targetIndex && i < duelData.messages.length; i++) {
+                    messagesToSend.push({
+                        index: i,
+                        msg: duelData.messages[i]
+                    });
+                }
+
+                console.log(`Enviando ${messagesToSend.length} mensajes (${lastSyncedIndex + 1} a ${targetIndex})`);
+
+                messagesToSend.forEach(({ index, msg }, arrayIndex) => {
+                    setTimeout(() => {
+                        console.log(`[Analizador] Enviando mensaje ${index}: ${msg.type}`);
+                        if (replayWindow && !replayWindow.closed) {
+                            replayWindow.postMessage({
+                                type: 'REPLAY_MESSAGE',
+                                message: msg
+                            }, '*');
+                        } else {
+                            console.warn(`Ventana de replay no disponible`);
+                        }
+                    }, arrayIndex * 50); // 50ms entre mensajes para evitar problemas de timing
+                });
+
+                lastSyncedIndex = targetIndex;
+            } catch (err) {
+                console.error('Error sincronizando replay window:', err);
+            }
+        }
+
+        function showMessageInfo(msg, index) {
+            const info = document.getElementById('messageInfo');
+            info.innerHTML = `
+                <div class="info-block">
+                    <strong>Tipo:</strong> ${msg.type}<br>
+                    <strong>Índice:</strong> ${index}<br>
+                    <strong>Timestamp:</strong> ${msg.timestamp}ms<br>
+                </div>
+                <div class="info-block">
+                    <strong>Payload:</strong><br>
+                    <code style="font-size: 10px;">${JSON.stringify(msg.payload, null, 2).substring(0, 500)}</code>
+                </div>
+            `;
+        }
+
+        function showStateAfter(msg) {
+            const state = msg.stateAfter;
+            const viewer = document.getElementById('stateViewer');
+
+            const fieldEntries = Object.entries(state.field || {})
+                .filter(([k, v]) => v && (v.code || v.location))
+                .slice(0, 5);
+
+            let html = `<strong>Field Entries (primeras 5):</strong>\n`;
+            fieldEntries.forEach(([k, v]) => {
+                html += `  ${k}: code=${v.code}, loc=0x${v.location.toString(16).padStart(2, '0')}\n`;
+            });
+
+            html += `\n<strong>Graves:</strong>\n`;
+            html += `  P0: ${state.graves?.[0]?.length || 0} cartas\n`;
+            html += `  P1: ${state.graves?.[1]?.length || 0} cartas\n`;
+
+            html += `\n<strong>Banished:</strong>\n`;
+            html += `  P0: ${state.banished?.[0]?.length || 0} cartas\n`;
+            html += `  P1: ${state.banished?.[1]?.length || 0} cartas\n`;
+
+            html += `\n<strong>Hands:</strong>\n`;
+            html += `  P0: ${state.hands?.[0]?.length || 0} cartas\n`;
+            html += `  P1: ${state.hands?.[1]?.length || 0} cartas\n`;
+
+            viewer.textContent = html;
+        }
+
+        function showValidations(msg, index) {
+            const validations = document.getElementById('validations');
+            let html = '';
+
+            // Validar que field no tiene cartas de cementerio
+            const cemeteryInField = Object.entries(msg.stateAfter.field || {})
+                .filter(([k, v]) => v && (v.location === 0x10 || v.location === 0x20));
+
+            if (cemeteryInField.length > 0) {
+                html += `<div class="info-block error">
+                    ⚠️ <strong>ERROR:</strong> Hay ${cemeteryInField.length} cartas de cementerio/desterradas en state.field<br>
+                    ${cemeteryInField.map(([k]) => `- ${k}`).join('<br>')}
+                </div>`;
+            } else {
+                html += `<div class="info-block success">✅ state.field limpio (sin cartas de cementerio/desterradas)</div>`;
+            }
+
+            // Validar cartas duplicadas
+            const keys = Object.keys(msg.stateAfter.field || {});
+            const stateKeys = keys.filter(k => k.includes(':'));
+            const visualKeys = keys.filter(k => !k.includes(':'));
+
+            if (visualKeys.length > 0) {
+                html += `<div class="info-block warning">
+                    ⚠️ <strong>ADVERTENCIA:</strong> Hay ${visualKeys.length} claves visuales en state.field<br>
+                    (Deberían usar formato de estado "controller:location:sequence")
+                </div>`;
+            }
+
+            validations.innerHTML = html || '<div class="info-block success">✅ Sin validaciones</div>';
+        }
+
+        function nextMessage() {
+            if (currentMessageIndex < duelData.messages.length - 1) {
+                jumpToMessage(currentMessageIndex + 1);
+            }
+        }
+
+        function prevMessage() {
+            if (currentMessageIndex > 0) {
+                jumpToMessage(currentMessageIndex - 1);
+            }
+        }
+
+        function autoPlay() {
+            if (autoPlayRunning) {
+                autoPlayRunning = false;
+                return;
+            }
+            autoPlayRunning = true;
+            const play = () => {
+                if (!autoPlayRunning) return;
+                nextMessage();
+                if (currentMessageIndex < duelData.messages.length - 1) {
+                    setTimeout(play, 500);
+                } else {
+                    autoPlayRunning = false;
+                }
+            };
+            play();
+        }
+
+        function downloadTemplate() {
+            alert('Descarga un archivo de logs desde el botón "📥 Descargar Logs" durante un duelo');
+        }
+    </script>
+</body>
+</html>
