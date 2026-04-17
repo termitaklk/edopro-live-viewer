@@ -3495,10 +3495,13 @@
         });
 
         function handleEventData(data) {
-            // Guardar initialState cuando se inicia la conexión de duelo
-            if (data.message === 'connection_open' && duelCapture.initialState === null) {
-                duelCapture.initialState = JSON.parse(JSON.stringify(state));
-                console.log('📊 Captura iniciada. Estado inicial guardado.');
+            // Reiniciar captura cuando se abre conexión de duelo (nueva sala)
+            if (data.message === 'connection_open') {
+                duelCapture.messages = [];
+                duelCapture.startTime = Date.now();
+                duelCapture.initialState = null;
+                hexMessageHistory = [];
+                console.log('📊 Captura lista. Esperando MSG_START...');
             }
 
             if (data.message === 'connection_open') {
@@ -3784,6 +3787,11 @@
                     if (Number.isFinite(lp1) && lp1 > 0) state.playerLp[1] = Math.round(lp1);
                     if (payload.deck0 !== null && payload.deck0 !== undefined) state.pileCounts.deck[0] = Number(payload.deck0);
                     if (payload.deck1 !== null && payload.deck1 !== undefined) state.pileCounts.deck[1] = Number(payload.deck1);
+                    // Capturar estado inicial DESPUÉS de procesar MSG_START
+                    if (duelCapture.initialState === null) {
+                        duelCapture.initialState = JSON.parse(JSON.stringify(state));
+                        console.log('📊 Estado inicial capturado DESPUÉS de MSG_START');
+                    }
                 }
 
                 if (payload.type === 'MSG_DRAW' && payload.player !== null) {
@@ -4355,16 +4363,19 @@
             }
 
             // Agregar a historial hex en LIVE duel (modo streaming, no replay)
-            if (!replayModeActive && data.message === 'game_msg' && data.payload?.type && data.payload?.payloadHex) {
-                const hexStr = data.payload.payloadHex.toLowerCase();
+            if (!replayModeActive && data.message === 'game_msg' && data.payload?.type) {
+                const hexStr = (data.payload?.payloadHex || data.payload?.raw || '??').toLowerCase();
                 hexMessageHistory.push({
-                    index: hexMessageHistory.length,
+                    index: hexMessageHistory.length + 1,
                     type: data.payload.type,
                     hex: hexStr,
                     timestamp: Date.now()
                 });
+                console.log(`📡 Mensaje hex capturado [${hexMessageHistory.length}]: ${data.payload.type}`);
                 // Mostrar el historial
-                hexHistoryContainer.style.display = 'block';
+                if (hexHistoryContainer) {
+                    hexHistoryContainer.style.display = 'block';
+                }
                 updateHexHistory();
             }
         }
