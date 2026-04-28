@@ -1,0 +1,55 @@
+export declare const STOC: {
+    readonly GAME_MSG: 1;
+    readonly ERROR_MSG: 2;
+    readonly TYPE_CHANGE: 19;
+    readonly DUEL_START: 21;
+    readonly DUEL_END: 22;
+    readonly WATCH_CHANGE: 34;
+    readonly CATCHUP: 240;
+    readonly CHAT_2: 243;
+};
+export declare const MSG: {
+    readonly START: 4;
+    readonly WIN: 5;
+    readonly UPDATE_DATA: 6;
+    readonly UPDATE_CARD: 7;
+    readonly NEW_TURN: 40;
+    readonly NEW_PHASE: 41;
+    readonly MOVE: 50;
+    readonly POS_CHANGE: 53;
+    readonly SET: 54;
+    readonly SUMMONING: 60;
+    readonly SUMMONED: 61;
+    readonly SPSUMMONING: 62;
+    readonly SPSUMMONED: 63;
+    readonly FLIPSUMMONING: 64;
+    readonly FLIPSUMMONED: 65;
+    readonly CHAINING: 70;
+    readonly CHAINED: 71;
+    readonly CHAIN_SOLVING: 72;
+    readonly CHAIN_SOLVED: 73;
+    readonly CHAIN_END: 74;
+    readonly DRAW: 90;
+    readonly DAMAGE: 91;
+    readonly RECOVER: 92;
+    readonly LPUPDATE: 94;
+    readonly PAY_LPCOST: 100;
+    readonly ATTACK: 110;
+    readonly BATTLE: 111;
+};
+export declare const LOCATION: {
+    readonly DECK: 1;
+    readonly HAND: 2;
+    readonly MZONE: 4;
+    readonly SZONE: 8;
+    readonly GRAVE: 16;
+    readonly REMOVED: 32;
+    readonly EXTRA: 64;
+    readonly OVERLAY: 128;
+};
+export declare const POSITION: {
+    readonly FACEUP_ATTACK: 1;
+    readonly FACEDOWN_ATTACK: 2;
+    readonly FACEUP_DEFENSE: 4;
+    readonly FACEDOWN_DEFENSE: 8;
+};

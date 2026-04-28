@@ -21,11 +21,13 @@ const port = Number(process.env.ROOM_TESTER_PORT || 8088);
 const frontEndDir = path.join(__dirname, "front-end");
 const viewerIndexPath = path.join(frontEndDir, "index.html");
 const testerPath = path.join(frontEndDir, "room-tester.html");
+const picsDir = path.join(__dirname, "pics");
 const ROOM_API_BASE = process.env.ROOM_API_BASE || "http://server.evolutionygo.com:7922";
 const DEFAULT_DUEL_PORT = Number(process.env.DUEL_SERVER_PORT || 7911);
 const ALLOWED_ROOM_API_HOSTS = parseAllowedHosts(process.env.ROOM_API_ALLOWED_HOSTS);
 const VIEWER_HEARTBEAT_TIMEOUT_MS = Number(process.env.VIEWER_HEARTBEAT_TIMEOUT_MS || 20_000);
 const VIEWER_HEARTBEAT_SWEEP_MS = Number(process.env.VIEWER_HEARTBEAT_SWEEP_MS || 5_000);
+const CARD_IMAGE_REMOTE_TEMPLATE = process.env.CARD_IMAGE_REMOTE_TEMPLATE || "https://images.ygoprodeck.com/images/cards/{id}.jpg";
 
 app.disable("x-powered-by");
 app.use(cors());
@@ -42,8 +44,36 @@ app.get(["/room-tester", "/room-tester.html"], (_req, res) => {
 });
 
 app.use("/static", express.static(frontEndDir));
-app.use("/pics", express.static(path.join(__dirname, "pics")));
+app.use("/pics", express.static(picsDir));
 app.use(express.static(frontEndDir));
+
+function resolveRemoteCardImageUrl(cardId) {
+  return CARD_IMAGE_REMOTE_TEMPLATE.replace(/\{id\}/g, String(cardId));
+}
+
+function getLocalCardImageCandidates(cardId) {
+  return [
+    path.join(picsDir, `${cardId}.jpg`),
+    path.join(picsDir, `${cardId}.jpeg`),
+    path.join(picsDir, `${cardId}.png`),
+  ];
+}
+
+function sendLocalCardImage(cardId, res) {
+  const fs = require("fs");
+  const candidates = getLocalCardImageCandidates(cardId);
+  const foundPath = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!foundPath) {
+    return false;
+  }
+
+  const extension = path.extname(foundPath).toLowerCase();
+  const contentType = extension === ".png" ? "image/png" : "image/jpeg";
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  fs.createReadStream(foundPath).pipe(res);
+  return true;
+}
 
 function resolveRoomApiBaseOrFail(serverBaseInput) {
   return resolveServerBase(serverBaseInput, ROOM_API_BASE, {
@@ -91,6 +121,44 @@ app.get("/api/card/:id", (req, res) => {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+});
+
+app.get("/api/card-image/:id", async (req, res) => {
+  const cardId = Number(req.params.id);
+  if (!Number.isFinite(cardId) || cardId <= 0) {
+    res.status(400).end();
+    return;
+  }
+
+  const remoteUrl = resolveRemoteCardImageUrl(cardId);
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const upstream = await fetch(remoteUrl, {
+      signal: controller.signal,
+      headers: {
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      },
+    });
+    clearTimeout(timeout);
+
+    if (upstream.ok) {
+      res.setHeader("Content-Type", upstream.headers.get("content-type") || "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.end(buf);
+      return;
+    }
+  } catch (_) {
+    // Intentionally fall back to local assets below.
+  }
+
+  if (sendLocalCardImage(cardId, res)) {
+    return;
+  }
+
+  res.status(404).end();
 });
 
 app.get("/api/rooms", async (req, res) => {
@@ -211,8 +279,9 @@ app.post(["/api/watch", "/api/idroom"], startWatchSession);
 
 app.get("/api/session/:uniqueId", (req, res) => {
   const includeReplay = req.query.includeReplay !== "0";
+  const includeTransport = req.query.includeTransport === "1";
   const consumeReplay = req.query.consumeReplay === "1";
-  const session = getSessionPayload(req.params.uniqueId, { includeReplay, consumeReplay });
+  const session = getSessionPayload(req.params.uniqueId, { includeReplay, includeTransport, consumeReplay });
 
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");

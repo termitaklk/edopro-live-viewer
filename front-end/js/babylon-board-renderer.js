@@ -16,6 +16,7 @@
             this.cardMeshes = new Map();
             this.materialCache = new Map();
             this.animatedMaterials = [];
+            this.boardEngine = null;
             this.options = options;
             this.currentPerspective = 0;
             this.assetRoot = options.assetRoot || "./assets/tablero3d/gltf/";
@@ -83,6 +84,7 @@
 
             await this.buildBoardEnvironment();
             this.buildDuelZone();
+            this.initBoardEngine();
 
             this.engine.runRenderLoop(() => {
                 this.tickScene();
@@ -592,22 +594,99 @@
             const mat = new BABYLON.StandardMaterial(`card-mat-${this.materialCache.size}`, this.scene);
             mat.specularColor = BABYLON.Color3.Black();
             mat.emissiveColor = new BABYLON.Color3(0.04, 0.04, 0.04);
+            this.assignCardTexture(mat, textureUrl);
+            this.materialCache.set(textureUrl, mat);
+            return mat;
+        }
 
-            mat.diffuseTexture = new BABYLON.Texture(
-                textureUrl, this.scene, false, true,
+        initBoardEngine() {
+            if (typeof globalScope.BoardEngine !== "function") {
+                return;
+            }
+
+            this.boardEngine = new globalScope.BoardEngine({
+                scene: this.scene,
+                cardImageBaseUrl: this.options.cardImageBaseUrl || '/api/card-image',
+                cardBackUrl: this.options.cardBackUrl || this.options.hiddenImageUrl || './Carta/Carta1.png',
+                getCardImageUrl: this.options.getCardImageUrl,
+                shouldRenderLocation: (location) => Number(location) !== 0x02,
+                getZoneWorldPosition: (controller, location, sequence) => this.getBoardEngineZonePosition(controller, location, sequence),
+                onLifePointsChange: this.options.onLifePointsChange,
+                onDebugEvent: this.options.onBoardEngineDebug || this.options.onDebugEvent,
+            });
+        }
+
+        getBoardEngineZonePosition(controller, location, sequence) {
+            const visibleCell = typeof this.options.getVisibleFieldCellKey === 'function'
+                ? this.options.getVisibleFieldCellKey(controller, location, sequence)
+                : null;
+            const anchor = visibleCell ? this.zoneAnchors.get(visibleCell) : null;
+            if (anchor) {
+                return anchor.absolutePosition.clone();
+            }
+
+            const side = controller === 0 ? 1 : -1;
+            switch (Number(location)) {
+                case 0x10:
+                    return new BABYLON.Vector3(4.34, 0.24, side > 0 ? -4.2 : 4.2);
+                case 0x20:
+                    return new BABYLON.Vector3(4.34, 0.24, side > 0 ? -2.8 : 2.8);
+                case 0x01:
+                    return new BABYLON.Vector3(-4.34, 0.24, side > 0 ? -4.2 + (Number(sequence) * 0.03) : 4.2 - (Number(sequence) * 0.03));
+                case 0x40:
+                    return new BABYLON.Vector3(-4.34, 0.24, side > 0 ? -2.8 + (Number(sequence) * 0.03) : 2.8 - (Number(sequence) * 0.03));
+                case 0x02:
+                    return new BABYLON.Vector3((Number(sequence) - 3) * 0.8, 0.24, side > 0 ? -5.1 : 5.1);
+                default:
+                    return new BABYLON.Vector3(0, 0.24, 0);
+            }
+        }
+
+        buildTextureFallbackChain(textureUrl) {
+            const hiddenTextureUrl = this.options.hiddenImageUrl;
+            const urls = [];
+
+            const pushUnique = (value) => {
+                if (!value || urls.includes(value)) {
+                    return;
+                }
+                urls.push(value);
+            };
+
+            pushUnique(textureUrl);
+
+            if (typeof this.options.getDirectCardImageUrl === "function") {
+                const directUrl = this.options.getDirectCardImageUrl(this.extractCardIdFromTextureUrl(textureUrl));
+                pushUnique(directUrl);
+            }
+
+            pushUnique(hiddenTextureUrl);
+            return urls;
+        }
+
+        extractCardIdFromTextureUrl(textureUrl) {
+            const value = String(textureUrl || "");
+            const match = value.match(/(\d+)(?:\.[a-z0-9]+)?(?:\?.*)?$/i);
+            return match ? match[1] : null;
+        }
+
+        assignCardTexture(material, textureUrl, attemptIndex = 0) {
+            const fallbackChain = this.buildTextureFallbackChain(textureUrl);
+            const nextUrl = fallbackChain[attemptIndex] || this.options.hiddenImageUrl;
+
+            material.diffuseTexture = new BABYLON.Texture(
+                nextUrl,
+                this.scene,
+                false,
+                true,
                 BABYLON.Texture.TRILINEAR_SAMPLINGMODE,
                 null,
                 () => {
-                    if (textureUrl !== this.options.hiddenImageUrl) {
-                        mat.diffuseTexture = new BABYLON.Texture(
-                            this.options.hiddenImageUrl, this.scene, false, true,
-                            BABYLON.Texture.TRILINEAR_SAMPLINGMODE
-                        );
+                    if (attemptIndex + 1 < fallbackChain.length) {
+                        this.assignCardTexture(material, textureUrl, attemptIndex + 1);
                     }
                 }
             );
-            this.materialCache.set(textureUrl, mat);
-            return mat;
         }
 
         createCardMesh(cellId, code, hidden) {
@@ -629,6 +708,9 @@
         }
 
         updateField(fieldState) {
+            if (this.boardEngine) {
+                return;
+            }
             const nextVisible = new Set();
 
             Object.values(fieldState || {}).forEach((fieldCard) => {
@@ -691,6 +773,27 @@
 
         updateHands(_handsState) {
             return;
+        }
+
+        applySpectatorEvent(event) {
+            if (!this.boardEngine || !event) {
+                return;
+            }
+            this.boardEngine.applyEvent(event);
+        }
+
+        renderBoardEngine() {
+            if (!this.boardEngine) {
+                return;
+            }
+            this.boardEngine.render();
+        }
+
+        syncBoardEngineState(snapshot) {
+            if (!this.boardEngine || !snapshot || typeof this.boardEngine.reloadFromSnapshot !== 'function') {
+                return;
+            }
+            this.boardEngine.reloadFromSnapshot(snapshot);
         }
 
         async animateMove(moveEvent) {

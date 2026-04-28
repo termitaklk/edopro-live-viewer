@@ -5,6 +5,21 @@ const { processStreamBuffer } = require('../tcp-conexion/validate');
 const messageHandlers = require('../messageshandler/messageHandlers');
 const { broadcast, broadcastEvent } = require('./websocket');
 const { createTraceLogger } = require('./message-trace');
+const COMMON_MSG = require('../messages/COMMON_MSG.JS');
+
+let MultiroleSpectatorDecoder = null;
+let SpectatorState = null;
+try {
+    ({ MultiroleSpectatorDecoder, SpectatorState } = require('multirole-spectator-protocol'));
+} catch (_) {
+    try {
+        ({ MultiroleSpectatorDecoder, SpectatorState } = require('../multirole-spectator-protocol/dist'));
+    } catch (_) {
+        MultiroleSpectatorDecoder = null;
+        SpectatorState = null;
+    }
+}
+
 const activeConnections = new Map();
 // SUCCESS REFERENCE (ROOM PASSWORD GATE):
 // - JOINERROR must block opening.
@@ -18,6 +33,321 @@ const HANDSHAKE_SUCCESS_STOC_TYPES = new Set([
 ]);
 
 const MAX_PENDING_BUFFER_BYTES = 1024 * 1024; // 1MB guardrail for malformed TCP streams
+
+function normalizeSpectatorSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') {
+        return null;
+    }
+
+    const lp0 = Number(snapshot?.lp?.[0]);
+    const lp1 = Number(snapshot?.lp?.[1]);
+    const turnPlayer = Number(snapshot?.turnPlayer);
+    const phase = Number(snapshot?.phase);
+    const watchCount = Number(snapshot?.watchCount);
+
+    return {
+        lp: [
+            Number.isFinite(lp0) ? lp0 : null,
+            Number.isFinite(lp1) ? lp1 : null,
+        ],
+        turnPlayer: Number.isFinite(turnPlayer) ? turnPlayer : null,
+        phase: Number.isFinite(phase) ? phase : null,
+        catchingUp: Boolean(snapshot.catchingUp),
+        watchCount: Number.isFinite(watchCount) ? watchCount : 0,
+        lastEventType: snapshot?.lastEvent?.type || null,
+    };
+}
+
+function createSpectatorZoneTracker() {
+    return {
+        pileCounts: {
+            deck: { 0: null, 1: null },
+        },
+        graves: { 0: [], 1: [] },
+        banished: { 0: [], 1: [] },
+    };
+}
+
+function cloneSpectatorZoneTracker(tracker) {
+    return {
+        pileCounts: {
+            deck: {
+                0: tracker?.pileCounts?.deck?.[0] ?? null,
+                1: tracker?.pileCounts?.deck?.[1] ?? null,
+            },
+        },
+        graves: {
+            0: Array.isArray(tracker?.graves?.[0]) ? tracker.graves[0].map((card) => ({ ...card })) : [],
+            1: Array.isArray(tracker?.graves?.[1]) ? tracker.graves[1].map((card) => ({ ...card })) : [],
+        },
+        banished: {
+            0: Array.isArray(tracker?.banished?.[0]) ? tracker.banished[0].map((card) => ({ ...card })) : [],
+            1: Array.isArray(tracker?.banished?.[1]) ? tracker.banished[1].map((card) => ({ ...card })) : [],
+        },
+    };
+}
+
+function readUInt32LESafe(buffer, offset) {
+    if (!Buffer.isBuffer(buffer) || offset < 0 || offset + 4 > buffer.length) {
+        return null;
+    }
+    return buffer.readUInt32LE(offset);
+}
+
+function parseSpectatorQueryBuffer(buffer, startOffset = 0) {
+    const result = {
+        flags: 0,
+        code: null,
+        position: null,
+        bytesRead: 0,
+        truncated: false,
+        noProgress: false,
+    };
+
+    if (!Buffer.isBuffer(buffer) || startOffset < 0 || startOffset >= buffer.length) {
+        return result;
+    }
+
+    let offset = startOffset;
+    while (offset + 2 <= buffer.length) {
+        const blockStart = offset;
+        const size = buffer.readUInt16LE(offset);
+        offset += 2;
+
+        if (size === 0) {
+            break;
+        }
+
+        if (offset + 4 > buffer.length) {
+            result.truncated = true;
+            break;
+        }
+
+        const flag = buffer.readUInt32LE(offset);
+        offset += 4;
+        const payloadSize = Math.max(0, size - 4);
+        if (offset + payloadSize > buffer.length) {
+            result.truncated = true;
+            break;
+        }
+
+        const payloadOffset = offset;
+        result.flags |= flag;
+
+        if (flag === COMMON_MSG.QUERY_CODE) {
+            result.code = readUInt32LESafe(buffer, payloadOffset);
+        }
+
+        if (flag === COMMON_MSG.QUERY_POSITION) {
+            result.position = readUInt32LESafe(buffer, payloadOffset);
+        }
+
+        offset += payloadSize;
+        if (offset <= blockStart) {
+            result.noProgress = true;
+            break;
+        }
+    }
+
+    result.bytesRead = Math.max(0, offset - startOffset);
+    return result;
+}
+
+function parseSpectatorUpdateData(queryBuffer) {
+    if (!Buffer.isBuffer(queryBuffer) || queryBuffer.length < 4) {
+        return [];
+    }
+
+    const totalSize = queryBuffer.readUInt32LE(0);
+    const cards = [];
+    let offset = 4;
+    let sequence = 0;
+    const bytesBudget = Math.min(Number(totalSize || 0), Math.max(0, queryBuffer.length - 4));
+    const budgetEnd = offset + bytesBudget;
+
+    while (offset < budgetEnd && offset + 2 <= queryBuffer.length) {
+        const query = parseSpectatorQueryBuffer(queryBuffer, offset);
+        if (query.bytesRead <= 0 || query.noProgress) {
+            break;
+        }
+
+        cards.push({
+            sequence,
+            code: query.code,
+            position: query.position,
+            flags: query.flags,
+        });
+        sequence += 1;
+        offset += query.bytesRead;
+
+        if (query.truncated) {
+            break;
+        }
+    }
+
+    return cards;
+}
+
+function parseSpectatorUpdateCard(queryBuffer, sequence) {
+    const query = parseSpectatorQueryBuffer(queryBuffer, 0);
+    return {
+        sequence,
+        code: query.code,
+        position: query.position,
+        flags: query.flags,
+    };
+}
+
+function upsertCardBySequence(cards, nextCard) {
+    const list = Array.isArray(cards) ? [...cards] : [];
+    const nextSequence = Number(nextCard?.sequence);
+    if (!Number.isFinite(nextSequence)) {
+        return list;
+    }
+
+    const index = list.findIndex((card) => Number(card?.sequence) === nextSequence);
+    const normalizedCard = {
+        code: nextCard?.code ?? (index >= 0 ? list[index]?.code ?? null : null),
+        position: nextCard?.position ?? (index >= 0 ? list[index]?.position ?? null : null),
+        sequence: nextSequence,
+    };
+
+    if (index >= 0) {
+        list[index] = { ...list[index], ...normalizedCard };
+    } else {
+        list.push(normalizedCard);
+        list.sort((left, right) => Number(left.sequence) - Number(right.sequence));
+    }
+
+    return list;
+}
+
+function removeCardBySequence(cards, sequence) {
+    if (!Array.isArray(cards)) {
+        return [];
+    }
+    return cards.filter((card) => Number(card?.sequence) !== Number(sequence));
+}
+
+function applySpectatorEventToZones(tracker, event) {
+    if (!tracker || !event || typeof event !== 'object') {
+        return false;
+    }
+
+    let changed = false;
+
+    if (event.type === 'MSG_START') {
+        tracker.pileCounts.deck[0] = Number.isFinite(Number(event.deckP0)) ? Number(event.deckP0) : tracker.pileCounts.deck[0];
+        tracker.pileCounts.deck[1] = Number.isFinite(Number(event.deckP1)) ? Number(event.deckP1) : tracker.pileCounts.deck[1];
+        tracker.graves = { 0: [], 1: [] };
+        tracker.banished = { 0: [], 1: [] };
+        changed = true;
+    }
+
+    if (event.type === 'MSG_DRAW') {
+        const player = Number(event.player);
+        const count = Math.max(0, Number(event.count || 0));
+        if ((player === 0 || player === 1) && Number.isFinite(Number(tracker.pileCounts.deck[player]))) {
+            tracker.pileCounts.deck[player] = Math.max(0, Number(tracker.pileCounts.deck[player]) - count);
+            changed = true;
+        }
+    }
+
+    if (event.type === 'MSG_MOVE') {
+        const from = event.from || {};
+        const to = event.to || {};
+        const fromController = Number(from.controller);
+        const toController = Number(to.controller);
+        const fromLocation = Number(from.location);
+        const toLocation = Number(to.location);
+
+        if ((fromController === 0 || fromController === 1) && fromLocation === COMMON_MSG.LOCATION_DECK && toLocation !== COMMON_MSG.LOCATION_DECK) {
+            if (Number.isFinite(Number(tracker.pileCounts.deck[fromController]))) {
+                tracker.pileCounts.deck[fromController] = Math.max(0, Number(tracker.pileCounts.deck[fromController]) - 1);
+                changed = true;
+            }
+        }
+
+        if ((toController === 0 || toController === 1) && toLocation === COMMON_MSG.LOCATION_DECK && fromLocation !== COMMON_MSG.LOCATION_DECK) {
+            if (Number.isFinite(Number(tracker.pileCounts.deck[toController]))) {
+                tracker.pileCounts.deck[toController] = Math.max(0, Number(tracker.pileCounts.deck[toController]) + 1);
+                changed = true;
+            }
+        }
+
+        if (fromController === 0 || fromController === 1) {
+            if (fromLocation === COMMON_MSG.LOCATION_GRAVE) {
+                tracker.graves[fromController] = removeCardBySequence(tracker.graves[fromController], from.sequence);
+                changed = true;
+            }
+            if (fromLocation === COMMON_MSG.LOCATION_REMOVED) {
+                tracker.banished[fromController] = removeCardBySequence(tracker.banished[fromController], from.sequence);
+                changed = true;
+            }
+        }
+
+        if (toController === 0 || toController === 1) {
+            if (toLocation === COMMON_MSG.LOCATION_GRAVE) {
+                tracker.graves[toController] = upsertCardBySequence(tracker.graves[toController], {
+                    code: event.code ?? null,
+                    position: to.position ?? null,
+                    sequence: to.sequence,
+                });
+                changed = true;
+            }
+            if (toLocation === COMMON_MSG.LOCATION_REMOVED) {
+                tracker.banished[toController] = upsertCardBySequence(tracker.banished[toController], {
+                    code: event.code ?? null,
+                    position: to.position ?? null,
+                    sequence: to.sequence,
+                });
+                changed = true;
+            }
+        }
+    }
+
+    if (event.type === 'MSG_UPDATE_DATA') {
+        const player = Number(event.player);
+        const location = Number(event.location);
+        const cards = parseSpectatorUpdateData(event.queryBuffer);
+        if (player === 0 || player === 1) {
+            if (location === COMMON_MSG.LOCATION_GRAVE) {
+                tracker.graves[player] = cards.map((card) => ({
+                    code: card.code ?? null,
+                    position: card.position ?? null,
+                    sequence: Number(card.sequence),
+                }));
+                changed = true;
+            }
+            if (location === COMMON_MSG.LOCATION_REMOVED) {
+                tracker.banished[player] = cards.map((card) => ({
+                    code: card.code ?? null,
+                    position: card.position ?? null,
+                    sequence: Number(card.sequence),
+                }));
+                changed = true;
+            }
+        }
+    }
+
+    if (event.type === 'MSG_UPDATE_CARD') {
+        const player = Number(event.controller);
+        const location = Number(event.location);
+        const card = parseSpectatorUpdateCard(event.queryBuffer, event.sequence);
+        if (player === 0 || player === 1) {
+            if (location === COMMON_MSG.LOCATION_GRAVE) {
+                tracker.graves[player] = upsertCardBySequence(tracker.graves[player], card);
+                changed = true;
+            }
+            if (location === COMMON_MSG.LOCATION_REMOVED) {
+                tracker.banished[player] = upsertCardBySequence(tracker.banished[player], card);
+                changed = true;
+            }
+        }
+    }
+
+    return changed;
+}
 
 function normalizeClientFlow(explicitFlow, roomMeta) {
     const requested = String(explicitFlow || '').trim().toLowerCase();
@@ -230,6 +560,9 @@ function establecer_conexion(id_room, uniqueId, roomMeta = null, connectionOptio
     let handshakeSettled = false;
     let handshakeTimer = null;
     let sawJoinError = false;
+    const spectatorDecoder = MultiroleSpectatorDecoder ? new MultiroleSpectatorDecoder() : null;
+    const spectatorState = SpectatorState ? new SpectatorState() : null;
+    const spectatorZoneTracker = createSpectatorZoneTracker();
     activeConnections.set(uniqueId, client);
 
     const safeResolveHandshake = (value) => {
@@ -283,23 +616,21 @@ function establecer_conexion(id_room, uniqueId, roomMeta = null, connectionOptio
         traceLogger.logSend('CTOS join game packet', joinGamePacket);
         console.log(`Conectado al servidor con ID de sesion ${client_id}`);
 
-        if (debugMode) {
-            broadcastEvent('socket_send', uniqueId, {
-                roomId: id_room,
-                serverHost: server_host,
-                serverPort: server_port,
-                hex: playerInfoPacket.toString('hex'),
-                description: 'CTOS player info packet',
-            });
+        broadcastEvent('socket_send', uniqueId, {
+            roomId: id_room,
+            serverHost: server_host,
+            serverPort: server_port,
+            hex: playerInfoPacket.toString('hex'),
+            description: 'CTOS player info packet',
+        });
 
-            broadcastEvent('socket_send', uniqueId, {
-                roomId: id_room,
-                serverHost: server_host,
-                serverPort: server_port,
-                hex: joinGamePacket.toString('hex'),
-                description: 'CTOS join game packet',
-            });
-        }
+        broadcastEvent('socket_send', uniqueId, {
+            roomId: id_room,
+            serverHost: server_host,
+            serverPort: server_port,
+            hex: joinGamePacket.toString('hex'),
+            description: 'CTOS join game packet',
+        });
 
         broadcastEvent('connection_open', uniqueId, {
             roomId: id_room,
@@ -347,13 +678,58 @@ function establecer_conexion(id_room, uniqueId, roomMeta = null, connectionOptio
             console.log(`Mensaje ${messageCount}: ${data.toString('hex')}`);
         }
 
-        if (debugMode) {
-            broadcastEvent('socket_frame', uniqueId, {
-                roomId: id_room,
-                messageCount,
-                hex: data.toString('hex'),
-                byteLength: data.length,
-            });
+        broadcastEvent('socket_frame', uniqueId, {
+            roomId: id_room,
+            messageCount,
+            hex: data.toString('hex'),
+            byteLength: data.length,
+        });
+
+        if (spectatorDecoder && spectatorState) {
+            try {
+                console.log(`[spectator-protocol] push chunk | bytes=${data.length} | hex=${data.toString('hex')}`);
+                const spectatorEvents = spectatorDecoder.push(data);
+                let nextSpectatorSnapshot = null;
+                let spectatorZonesChanged = false;
+
+                for (const event of spectatorEvents) {
+                    console.log(`[spectator-protocol] event`, event);
+                    nextSpectatorSnapshot = spectatorState.apply(event);
+                    if (applySpectatorEventToZones(spectatorZoneTracker, event)) {
+                        spectatorZonesChanged = true;
+                    }
+                }
+
+                if (nextSpectatorSnapshot) {
+                    const normalizedSnapshot = normalizeSpectatorSnapshot(nextSpectatorSnapshot);
+                    console.log(`[spectator-protocol] snapshot`, normalizedSnapshot);
+                    broadcastEvent('spectator_state', uniqueId, {
+                        roomId: id_room,
+                        messageCount,
+                        eventCount: spectatorEvents.length,
+                        snapshot: normalizedSnapshot,
+                        clientFlow,
+                    });
+                } else if (spectatorEvents.length === 0) {
+                    console.log('[spectator-protocol] no events decoded for this chunk');
+                }
+
+                if (spectatorZonesChanged) {
+                    const zoneSnapshot = cloneSpectatorZoneTracker(spectatorZoneTracker);
+                    console.log('[spectator-protocol] zones', zoneSnapshot);
+                    broadcastEvent('spectator_zones', uniqueId, {
+                        roomId: id_room,
+                        messageCount,
+                        zones: zoneSnapshot,
+                        clientFlow,
+                    });
+                }
+            } catch (error) {
+                console.warn('[spectator-protocol] decode failed', error);
+                if (debugMode) {
+                    console.warn('Spectator protocol decode failed:', error?.message || error);
+                }
+            }
         }
 
         pendingBuffer = pendingBuffer.length > 0 ? Buffer.concat([pendingBuffer, data]) : data;
@@ -374,7 +750,7 @@ function establecer_conexion(id_room, uniqueId, roomMeta = null, connectionOptio
         pendingBuffer = Buffer.isBuffer(remainingHex) ? remainingHex : Buffer.from(remainingHex || '', 'hex');
         traceLogger.logFrame(messageCount, data, results, pendingBuffer.length);
 
-        if (debugMode && pendingBuffer.length > 0) {
+        if (pendingBuffer.length > 0) {
             broadcastEvent('socket_buffer_pending', uniqueId, {
                 roomId: id_room,
                 messageCount,
@@ -390,18 +766,18 @@ function establecer_conexion(id_room, uniqueId, roomMeta = null, connectionOptio
                 console.log(`Longitud esperada: ${result.expectedLength}`);
                 console.log(`Longitud actual: ${result.actualLength}`);
                 console.log(`Es valido: ${result.isValid}`);
-
-                broadcastEvent('socket_segment', uniqueId, {
-                    roomId: id_room,
-                    index: index + 1,
-                    segment: result.segment.toString('hex'),
-                    messageType: result.messageType,
-                    messageName: result.messageName,
-                    expectedLength: result.expectedLength,
-                    actualLength: result.actualLength,
-                    isValid: result.isValid,
-                });
             }
+
+            broadcastEvent('socket_segment', uniqueId, {
+                roomId: id_room,
+                index: index + 1,
+                segment: result.segment.toString('hex'),
+                messageType: result.messageType,
+                messageName: result.messageName,
+                expectedLength: result.expectedLength,
+                actualLength: result.actualLength,
+                isValid: result.isValid,
+            });
 
             if (result.isValid && messageHandlers[result.messageType]) {
                 messageHandlers[result.messageType](result.segment, {
@@ -410,7 +786,7 @@ function establecer_conexion(id_room, uniqueId, roomMeta = null, connectionOptio
                     messageCount,
                     clientFlow,
                 });
-            } else if (result.isValid && debugMode) {
+            } else if (result.isValid) {
                 broadcastEvent('socket_unhandled', uniqueId, {
                     roomId: id_room,
                     messageType: result.messageType,
@@ -483,15 +859,13 @@ function establecer_conexion(id_room, uniqueId, roomMeta = null, connectionOptio
                 traceLogger.logSend('CTOS switch to observer packet', toObserverPacket);
                 spectatorCommandSent = true;
 
-                if (debugMode) {
-                    broadcastEvent('socket_send', uniqueId, {
-                        roomId: id_room,
-                        serverHost: server_host,
-                        serverPort: server_port,
-                        hex: toObserverPacket.toString('hex'),
-                        description: 'CTOS switch to observer packet',
-                    });
-                }
+                broadcastEvent('socket_send', uniqueId, {
+                    roomId: id_room,
+                    serverHost: server_host,
+                    serverPort: server_port,
+                    hex: toObserverPacket.toString('hex'),
+                    description: 'CTOS switch to observer packet',
+                });
             }
 
         });

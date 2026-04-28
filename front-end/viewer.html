@@ -1147,6 +1147,42 @@
                 </div>
 
                 <div id="centerPane">
+                    <div id="offlineLoadModal" class="hidden" style="
+                        position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                        background: rgba(10, 14, 39, 0.98); z-index: 1000;
+                        display: flex; flex-direction: column; align-items: center; justify-content: center;
+                        gap: 20px; padding: 40px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 24px; color: #16c784; margin-bottom: 10px;">
+                                ðŸ“‚ Cargar Mensajes Hexadecimales
+                            </div>
+                            <div style="color: #c2bed3; font-size: 13px; max-width: 400px;">
+                                Selecciona un archivo JSON de mensajes hex descargados para reproducirlos en el viewer
+                            </div>
+                        </div>
+                        <input type="file" id="offlineHexInput" accept=".json" style="
+                            padding: 10px; background: #0d111c; border: 2px solid #2f3945;
+                            color: #c2bed3; border-radius: 4px; cursor: pointer; width: 90%; max-width: 400px;
+                            font-size: 12px;">
+                        <div style="display: flex; gap: 10px;">
+                            <button id="offlineHexLoadBtn" style="
+                                padding: 10px 20px; background: #16c784; border: none;
+                                color: #0a0e27; cursor: pointer; border-radius: 4px;
+                                font-weight: bold; font-size: 12px;">
+                                â–¶ Reproducir
+                            </button>
+                            <button id="offlineHexCancelBtn" style="
+                                padding: 10px 20px; background: #0d111c; border: 1px solid #2f3945;
+                                color: #c2bed3; cursor: pointer; border-radius: 4px;
+                                font-size: 12px;">
+                                Cancelar
+                            </button>
+                        </div>
+                        <div style="color: #666; font-size: 11px; margin-top: 10px;">
+                            O espera a que se conecte a un duelo en vivo
+                        </div>
+                    </div>
+
                     <div id="waitingLobby">
                         <div class="lobby-shell">
                             <div class="lobby-grid">
@@ -1260,79 +1296,115 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Panel de inspección hex dual (solo visible en modo replay) -->
-                    <div id="hexInspectorContainer" class="hidden" style="
-                        position: absolute; bottom: 0; left: 0; right: 0;
-                        height: 220px; background: rgba(8,10,16,0.97);
-                        border-top: 1px solid #2f3945; border-radius: 0 0 14px 14px;
-                        z-index: 9990; flex-direction: column; overflow: hidden;">
-                        <div id="hexInspectorHeader" style="
-                            display: flex; align-items: center; justify-content: space-between;
-                            padding: 6px 12px; background: #0d111c; border-bottom: 1px solid #2f3945;
-                            flex-shrink: 0;">
-                            <span id="hexInspectorTitle" style="color:#16c784;font-family:monospace;font-size:12px;">
-                                Inspector Hex
-                            </span>
-                            <button id="hexInspectorClose" style="
-                                background:none; border:none; color:#666; cursor:pointer;
-                                font-size:14px; padding:0 4px;">✕</button>
-                        </div>
-                        <div style="display:flex;flex:1;overflow:hidden;gap:0;">
-                            <div id="hexViewerPane" style="
-                                flex:1; overflow-y:auto; padding:8px;
-                                font-family:monospace; font-size:11px;
-                                border-right:1px solid #2f3945; word-break:break-all; line-height:1.8;">
-                            </div>
-                            <div id="fieldsTablePane" style="flex:1;overflow-y:auto;padding:8px;">
-                                <table id="fieldsTable" style="
-                                    width:100%;border-collapse:collapse;
-                                    font-family:monospace;font-size:11px;">
-                                    <thead>
-                                        <tr style="color:#16c784;border-bottom:1px solid #2f3945;">
-                                            <th style="text-align:left;padding:2px 6px;">Campo</th>
-                                            <th style="text-align:left;padding:2px 6px;">Valor</th>
-                                            <th style="text-align:left;padding:2px 6px;">Interpretación</th>
-                                            <th style="text-align:left;padding:2px 6px;">Offset</th>
-                                            <th style="text-align:left;padding:2px 6px;">Bytes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="fieldsTableBody"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 <div id="livePanel">
                     <h3>Live Duel State</h3>
-                    <button id="hexInspectorToggle" class="hidden" style="
+                    <button id="hexInspectorToggle" style="
                         width:100%;padding:8px;margin-bottom:6px;
                         background:#0d111c;border:1px solid #2f3945;
                         color:#16c784;cursor:pointer;border-radius:4px;
                         font-family:monospace;font-size:11px;">
-                        🔍 Inspeccionar Hex
+                        ðŸ” Inspeccionar Hex
                     </button>
 
-                    <!-- Historial de mensajes hex en live duel -->
-                    <div id="hexHistoryContainer" style="
-                        display:none;margin-bottom:10px;background:#0d111c;
+                    <!-- Stream raw en live duel -->
+                    <div id="hexHistoryContainer" class="hidden" style="
+                        margin-bottom:10px;background:#0d111c;
                         border:1px solid #2f3945;border-radius:4px;padding:6px;
                         max-height:300px;overflow-y:auto;">
                         <div style="color:#16c784;font-size:11px;font-weight:bold;margin-bottom:4px;">
-                            📡 Mensajes Hex Recibidos
+                            ðŸ“¡ Mensajes Hex Recibidos
                         </div>
                         <div id="hexHistoryList" style="
                             font-size:10px;font-family:monospace;color:#c2bed3;
                             max-height:280px;overflow-y:auto;"></div>
                     </div>
 
-                    <button id="downloadLogsButton" style="width: 100%; padding: 10px; margin-bottom: 10px; background: linear-gradient(135deg, #1a1a2e, #16c784); border: 2px solid #16c784; color: #fff; cursor: pointer; border-radius: 6px; font-size: 12px; font-weight: bold; box-shadow: 0 0 10px rgba(22, 199, 132, 0.5); transition: all 0.3s;">📥 Descargar Logs</button>
+                    <button id="downloadLogsButton" style="width: 100%; padding: 10px; margin-bottom: 10px; background: linear-gradient(135deg, #1a1a2e, #16c784); border: 2px solid #16c784; color: #fff; cursor: pointer; border-radius: 6px; font-size: 12px; font-weight: bold; box-shadow: 0 0 10px rgba(22, 199, 132, 0.5); transition: all 0.3s;">ðŸ“¥ Descargar Logs</button>
                     <div id="liveMeta" class="meta">Waiting for events...</div>
                     <div id="lastCardId">Last valid card id: none</div>
                     <div id="lastImagePath">Last image path: none</div>
                     <div id="cardDebug">Last card event: waiting...</div>
                     <div id="liveLog"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de inspecciÃ³n hex - PARTE INFERIOR -->
+        <div id="hexInspectorContainer" class="hidden" style="
+            position: absolute; bottom: 0; left: 0; right: 0;
+            width: 100%; height: 400px; background: rgba(8,10,16,0.97);
+            border-top: 1px solid #2f3945;
+            z-index: 9990; display: flex; flex-direction: column; overflow: hidden;">
+            <div id="hexInspectorHeader" style="
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 6px 12px; background: #0d111c; border-bottom: 1px solid #2f3945;
+                flex-shrink: 0;">
+                <span id="hexInspectorTitle" style="color:#16c784;font-family:monospace;font-size:12px;">
+                    Inspector Hex
+                </span>
+                <div style="display:flex; gap:4px;">
+                    <button id="hexLoadButton" style="
+                        background:none; border:1px solid #2f3945; color:#16c784; cursor:pointer;
+                        font-size:11px; padding:2px 6px; border-radius:2px; transition:all 0.2s;">
+                        ðŸ“‚ Cargar
+                    </button>
+                    <button id="hexPlayButton" style="
+                        background:none; border:1px solid #2f3945; color:#51cf66; cursor:pointer;
+                        font-size:11px; padding:2px 6px; border-radius:2px; transition:all 0.2s;">
+                        â–¶ Reproducir
+                    </button>
+                    <button id="hexDownloadButton" style="
+                        background:none; border:1px solid #2f3945; color:#16c784; cursor:pointer;
+                        font-size:11px; padding:2px 6px; border-radius:2px; transition:all 0.2s;">
+                        ðŸ“¥ Descargar
+                    </button>
+                    <button id="hexInspectorClose" style="
+                        background:none; border:none; color:#666; cursor:pointer;
+                        font-size:14px; padding:0 4px;">âœ•</button>
+                </div>
+            </div>
+            <div style="display:flex;flex:1;overflow:hidden;gap:0;width:100%;">
+                <div id="hexViewerPane" style="
+                    flex:1; overflow-y:auto; padding:8px;
+                    font-family:monospace; font-size:11px;
+                    border-right:1px solid #2f3945; word-break:break-all; line-height:1.8;
+                    background:#0a0e27; position: relative;">
+                    <div id="hexLoadOverlay" class="hidden" style="
+                        position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                        background: rgba(10, 14, 39, 0.95); z-index: 10;
+                        display: flex; flex-direction: column; align-items: center; justify-content: center;
+                        padding: 20px; text-align: center;">
+                        <div style="color: #16c784; font-size: 12px; margin-bottom: 10px;">
+                            ðŸ“‚ Cargar mensajes hexadecimales
+                        </div>
+                        <input type="file" id="hexLoadInput" accept=".json" style="
+                            margin-bottom: 10px; padding: 8px; background: #0d111c;
+                            border: 1px solid #2f3945; color: #c2bed3; border-radius: 4px;
+                            cursor: pointer; width: 90%; max-width: 300px;">
+                        <button id="hexLoadCancel" style="
+                            padding: 6px 12px; background: #0d111c; border: 1px solid #2f3945;
+                            color: #666; cursor: pointer; border-radius: 4px; font-size: 11px;">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+                <div id="fieldsTablePane" style="flex:1;overflow-y:auto;padding:8px;background:#0a0e27;">
+                    <table id="fieldsTable" style="
+                        width:100%;border-collapse:collapse;
+                        font-family:monospace;font-size:11px;color:#c2bed3;">
+                        <thead>
+                            <tr style="color:#16c784;border-bottom:1px solid #2f3945;position:sticky;top:0;background:#0d111c;">
+                                <th style="text-align:left;padding:6px;font-weight:bold;">Campo</th>
+                                <th style="text-align:left;padding:6px;font-weight:bold;">Valor</th>
+                                <th style="text-align:left;padding:6px;font-weight:bold;">InterpretaciÃ³n</th>
+                                <th style="text-align:left;padding:6px;font-weight:bold;">Offset</th>
+                                <th style="text-align:left;padding:6px;font-weight:bold;">Bytes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fieldsTableBody" style="font-size:10px;"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -1344,10 +1416,13 @@
     <script src="./js/viewer-board-mode.js"></script>
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="./js/board-engine.js"></script>
     <script src="./js/babylon-board-renderer.js"></script>
+    <script src="./js/duel-message-decoder.js"></script>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const uniqueId = urlParams.get('id');
+        const hasLiveSessionId = !!uniqueId;
         const initialView = (urlParams.get('view') || 'waiting').toLowerCase();
         const events = new EventSource('/events');
         const viewerStage = document.getElementById('viewerStage');
@@ -1384,6 +1459,17 @@
         const graveModalClose = document.getElementById('graveModalClose');
         const graveSizeToggle = document.getElementById('graveSizeToggle');
         const graveModalBackdrop = document.getElementById('graveModalBackdrop');
+        const hexHistoryContainer = document.getElementById('hexHistoryContainer');
+        const hexHistoryList = document.getElementById('hexHistoryList');
+        const hexInspectorContainer = document.getElementById('hexInspectorContainer');
+        const hexInspectorToggle = document.getElementById('hexInspectorToggle');
+        const hexViewerPane = document.getElementById('hexViewerPane');
+        const fieldsTableBody = document.getElementById('fieldsTableBody');
+        const hexInspectorTitle = document.getElementById('hexInspectorTitle');
+        const offlineLoadModal = document.getElementById('offlineLoadModal');
+        const offlineHexInput = document.getElementById('offlineHexInput');
+        const offlineHexLoadBtn = document.getElementById('offlineHexLoadBtn');
+        const offlineHexCancelBtn = document.getElementById('offlineHexCancelBtn');
         const slots = [
             document.getElementById('slot0'),
             document.getElementById('slot1'),
@@ -1442,6 +1528,7 @@
         const state = {
             phase: initialView === 'duel' ? 'dueling' : 'waiting',
             clientFlow: 'edopro',
+            spectatorProtocol: null,
             turnPlayer: null,
             turnPlayerFromSnapshot: null,
             turnPlayerFromMessage: null,
@@ -1484,12 +1571,14 @@
         let replayModeActive = false;
         let replayData = null;
         let replayCurrentIndex = 0;
+        let hexMessageHistory = []; // Stream raw/hex para live duel
+        let liveHexSelectedIndex = -1;
 
         // Detectar si estamos en modo replay leyendo localStorage
         const duelReplayDataStr = localStorage.getItem('duelReplayData');
         const duelReplayModeStr = localStorage.getItem('duelReplayMode');
 
-        if (duelReplayModeStr === 'true' && duelReplayDataStr) {
+        if (!hasLiveSessionId && duelReplayModeStr === 'true' && duelReplayDataStr) {
             try {
                 replayData = JSON.parse(duelReplayDataStr);
                 replayModeActive = true;
@@ -1518,11 +1607,14 @@
                 state.phase = 'dueling';
                 currentDuelUniqueId = 'replay-mode';
 
-                console.log('✅ Modo replay activado con', replayData.messages.length, 'mensajes');
+                console.log('âœ… Modo replay activado con', replayData.messages.length, 'mensajes');
                 console.log('Estado inicial:', JSON.stringify(state, null, 2).substring(0, 500));
 
-                // Usar setTimeout para asegurar que todo está inicializado antes de renderizar
-                setTimeout(() => {
+                // Usar setTimeout para asegurar que todo estÃ¡ inicializado antes de renderizar
+                if (document.getElementById('hexInspectorToggle')) {
+                    document.getElementById('hexInspectorToggle').classList.remove('hidden');
+                }
+                if (false) setTimeout(() => {
                     console.log('Renderizando estado inicial de replay...');
                     renderState();
                     console.log('Estado inicial renderizado');
@@ -1530,6 +1622,18 @@
             } catch (err) {
                 console.error('Error cargando replay data:', err);
                 replayModeActive = false;
+            }
+        }
+
+        if (hasLiveSessionId && duelReplayModeStr === 'true') {
+            replayModeActive = false;
+        }
+
+        // MODO OFFLINE: Mostrar modal de carga si no hay sessionId y no hay replay
+        if (!hasLiveSessionId && !(duelReplayModeStr === 'true' && duelReplayDataStr)) {
+            if (offlineLoadModal) {
+                offlineLoadModal.classList.remove('hidden');
+                console.log('âœ… Modo offline: mostrando modal de carga de archivos hex');
             }
         }
 
@@ -1546,7 +1650,7 @@
         let perspectiveSwitching = false;
         let graveCardSizeMode = 'compact';
 
-        // Esquemas de payloads para inspección hex dual
+        // Esquemas de payloads para inspecciÃ³n hex dual
         const PAYLOAD_SCHEMAS = {
             MSG_START: [
                 { name: 'playerType', start: 0, length: 1, type: 'UInt8' },
@@ -1603,7 +1707,7 @@
         };
         const HEADER_BYTES = 4;
 
-        // Sistema de captura de duelos para análisis
+        // Sistema de captura de duelos para anÃ¡lisis
         const duelCapture = {
             enabled: true,
             messages: [],
@@ -1611,15 +1715,38 @@
             initialState: null,
 
             captureMessage(type, payload) {
-                // Deprecated: captura ahora se hace en handleEventData DESPUÉS de procesar
-                // Esta función se mantiene para compatibilidad hacia atrás
+                // Deprecated: captura ahora se hace en handleEventData DESPUÃ‰S de procesar
+                // Esta funciÃ³n se mantiene para compatibilidad hacia atrÃ¡s
             },
 
             download() {
+                const transportMessages = hexMessageHistory
+                    .filter((msg) => isRawTransportCaptureType(msg?.type))
+                    .map((msg, idx) => ({
+                        index: idx + 1,
+                        sourceIndex: msg.index,
+                        type: msg.type,
+                        timestamp: msg.timestamp,
+                        hex: msg.hex,
+                        raw: msg.raw,
+                        line: msg.line,
+                        payload: msg.payload ? (Object.keys(msg.payload).length > 0 ? msg.payload : null) : null,
+                    }));
                 const data = {
+                    version: '2.0',
                     startTime: this.startTime,
                     initialState: this.initialState,
-                    messages: this.messages,
+                    messageCount: transportMessages.length,
+                    sessionInfo: {
+                        uniqueId: uniqueId,
+                        clientFlow: state.clientFlow || 'edopro',
+                        room: state.room ? {
+                            roomId: state.room.roomId,
+                            roomName: state.room.roomName,
+                        } : null,
+                    },
+                    messages: transportMessages,
+                    processedMessages: this.messages,
                 };
                 const json = JSON.stringify(data, null, 2);
                 const blob = new Blob([json], { type: 'application/json' });
@@ -1629,8 +1756,60 @@
                 a.download = `duel-${new Date().toISOString()}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
-                console.log(`✅ Descargados ${this.messages.length} mensajes capturados`);
-                appendLog(`📥 Descargados ${this.messages.length} mensajes de duelo`);
+                console.log(`âœ… Descargados ${this.messages.length} mensajes capturados`);
+                appendLog(`ðŸ“¥ Descargados ${this.messages.length} mensajes de duelo`);
+            },
+        };
+
+        const hexCapture = {
+            async download() {
+                let exportMessages = [...hexMessageHistory];
+                if (uniqueId) {
+                    try {
+                        const response = await fetch(`/api/session/${uniqueId}?t=${Date.now()}&includeReplay=0&includeTransport=1`, {
+                            cache: 'no-store',
+                        });
+                        if (response.ok) {
+                            const snapshot = await response.json();
+                            const transportEvents = Array.isArray(snapshot?.session?.transportEvents)
+                                ? snapshot.session.transportEvents
+                                : [];
+                            if (transportEvents.length > 0) {
+                                exportMessages = transportEvents.map((item, index) => buildTransportHistoryEntry(item, index + 1));
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('Hex export fallback to local history:', error);
+                    }
+                }
+
+                const data = {
+                    version: '1.0',
+                    captureTime: new Date().toISOString(),
+                    messageCount: exportMessages.length,
+                    sessionInfo: {
+                        uniqueId: uniqueId,
+                        clientFlow: state.clientFlow || 'edopro',
+                        room: state.room ? {
+                            roomId: state.room.roomId,
+                            roomName: state.room.roomName,
+                        } : null,
+                    },
+                    messages: exportMessages
+                        .map((msg, index) => buildRawTransportExportEntry(msg, index + 1))
+                        .filter((msg) => !!msg.hex),
+                };
+                data.messageCount = data.messages.length;
+                const json = JSON.stringify(data, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hex-messages-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                console.log(`Hex export downloaded: ${exportMessages.length} messages`);
+                appendLog(`Hex export downloaded: ${exportMessages.length} messages`);
             },
         };
 
@@ -1669,6 +1848,84 @@
             ) return 'bp';
             if (raw === 'end' || raw === 'ep' || raw === 'phase512') return 'ep';
             return raw;
+        }
+
+        function mapSpectatorProtocolPhase(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return null;
+            if (numeric === 0x01) return 'phase:draw';
+            if (numeric === 0x02) return 'phase:standby';
+            if (numeric === 0x04) return 'phase:main1';
+            if (numeric === 0x08 || numeric === 0x10 || numeric === 0x20 || numeric === 0x40 || numeric === 0x80) return 'phase:battle';
+            if (numeric === 0x100) return 'phase:main2';
+            if (numeric === 0x200) return 'phase:end';
+            return `phase:${numeric}`;
+        }
+
+        function applySpectatorProtocolSnapshot(snapshot) {
+            if (!snapshot || typeof snapshot !== 'object') {
+                return;
+            }
+
+            state.spectatorProtocol = snapshot;
+
+            const lp0 = Number(snapshot?.lp?.[0]);
+            const lp1 = Number(snapshot?.lp?.[1]);
+            if (Number.isFinite(lp0)) {
+                state.playerLp[0] = lp0;
+            }
+            if (Number.isFinite(lp1)) {
+                state.playerLp[1] = lp1;
+            }
+
+            if (snapshot.turnPlayer !== null && snapshot.turnPlayer !== undefined) {
+                state.turnPlayerFromSnapshot = mapProtocolPlayer(snapshot.turnPlayer);
+            }
+
+            const normalizedPhase = mapSpectatorProtocolPhase(snapshot.phase);
+            if (normalizedPhase) {
+                state.phase = normalizedPhase;
+            }
+
+            if (snapshot.watchCount !== null && snapshot.watchCount !== undefined) {
+                state.spectators = Number(snapshot.watchCount) || 0;
+            }
+
+            if (String(state.phase).startsWith('phase:') || state.turnPlayerFromSnapshot !== null) {
+                state.turnPlayer = getAuthoritativeTurnPlayer();
+            }
+        }
+
+        function applySpectatorZoneSnapshot(zones) {
+            if (!zones || typeof zones !== 'object') {
+                return;
+            }
+
+            if (zones.pileCounts?.deck) {
+                state.pileCounts = state.pileCounts || { deck: { 0: null, 1: null } };
+                state.pileCounts.deck = {
+                    0: zones.pileCounts.deck[0] ?? state.pileCounts.deck[0] ?? null,
+                    1: zones.pileCounts.deck[1] ?? state.pileCounts.deck[1] ?? null,
+                };
+            }
+
+            if (zones.graves) {
+                state.graves = {
+                    0: Array.isArray(zones.graves[0]) ? zones.graves[0].map((card) => ({ ...card })) : state.graves?.[0] || [],
+                    1: Array.isArray(zones.graves[1]) ? zones.graves[1].map((card) => ({ ...card })) : state.graves?.[1] || [],
+                };
+                syncGraveSnapshot(0);
+                syncGraveSnapshot(1);
+            }
+
+            if (zones.banished) {
+                state.banished = {
+                    0: Array.isArray(zones.banished[0]) ? zones.banished[0].map((card) => ({ ...card })) : state.banished?.[0] || [],
+                    1: Array.isArray(zones.banished[1]) ? zones.banished[1].map((card) => ({ ...card })) : state.banished?.[1] || [],
+                };
+                syncBanishedSnapshot(0);
+                syncBanishedSnapshot(1);
+            }
         }
 
         function updatePhaseButtons() {
@@ -2089,7 +2346,11 @@
             return cards
                 .map((card) => {
                     const decoded = decodeCardPosition(card.position);
-                    return `seq=${card.sequence},id=${formatCardId(card.code)},pos=${decoded.raw === null ? 'null' : decoded.raw}(${decoded.label})`;
+                    let stateLabel = 'presente';
+                    if (card.isEmpty) stateLabel = 'vacia';
+                    else if (card.isFaceDown) stateLabel = 'boca_abajo';
+                    else if (card.isOccupied) stateLabel = 'boca_arriba';
+                    return `seq=${card.sequence},estado=${stateLabel},id=${formatCardId(card.code)},pos=${decoded.raw === null ? 'null' : decoded.raw}(${decoded.label})`;
                 })
                 .join(' | ');
         }
@@ -2601,9 +2862,21 @@
                 boardTheme: 'visor-neon',
                 assetRoot: './assets/tablero3d/gltf/',
                 hiddenImageUrl: './Carta/Carta1.png',
+                cardImageBaseUrl: '/api/card-image',
+                cardBackUrl: './Carta/Carta1.png',
                 getCardImageUrl: (cardId) => `/api/card-image/${String(Number(cardId) >>> 0)}`,
                 decodeCardPosition,
                 getVisibleFieldCellKey,
+                onLifePointsChange: (lp) => {
+                    if (!Array.isArray(lp) || lp.length < 2) return;
+                    state.playerLp = {
+                        0: Number.isFinite(Number(lp[0])) ? Number(lp[0]) : state.playerLp[0],
+                        1: Number.isFinite(Number(lp[1])) ? Number(lp[1]) : state.playerLp[1],
+                    };
+                },
+                onBoardEngineDebug: (event) => {
+                    console.debug('[BoardEngine]', event);
+                },
             });
             window.babylonRenderer = babylonRenderer;
             babylonRenderer.init().then(() => {
@@ -2897,7 +3170,7 @@
                 }
             });
 
-            // Limpiar state.field de entradas INVÁLIDAS:
+            // Limpiar state.field de entradas INVÃLIDAS:
             // 1. Cartas de cementerio (0x10) o desterradas (0x20)
             // 2. Claves visuales como 'a4', 'c3', 'graveTop', etc. que no son de estado
             const visualCellKeys = new Set([
@@ -3249,10 +3522,12 @@
                         renderHand,
                         renderField,
                         renderGraves,
+                        renderBanished,
                         renderDeckCounts,
                         updatePhaseButtons,
                         updateTopBar,
                         updateBoardOrientation,
+                        babylonRenderer,
                     });
                     console.log('ViewerBoardMode.renderBoardScene completado');
                 } catch (err) {
@@ -3407,6 +3682,8 @@
                     state.pileCounts = session.pileCounts || state.pileCounts;
                     state.players = Array.isArray(session.players) ? session.players : state.players;
                     state.spectators = session.spectators ?? state.spectators;
+                    applySpectatorProtocolSnapshot(session.spectatorProtocol);
+                    applySpectatorZoneSnapshot(session.spectatorProtocolZones || session.spectatorZones || session.spectatorProtocol?.zones || null);
                     state.rps = session.rps ?? state.rps;
                     state.hands = session.hands || state.hands;
                     state.field = session.field || state.field;
@@ -3453,6 +3730,9 @@
                         });
                     }
                     snapshotHydrated = true;
+                    if (babylonRenderer && typeof babylonRenderer.syncBoardEngineState === 'function') {
+                        babylonRenderer.syncBoardEngineState(state);
+                    }
                 } else {
                     state.room = state.room || session.room;
                     state.clientFlow = session.clientFlow || state.clientFlow || state.room?.roomClient || 'edopro';
@@ -3470,11 +3750,362 @@
                     state.playerLp = session.playerLp || state.playerLp;
                     state.pileCounts = session.pileCounts || state.pileCounts;
                     state.spectators = session.spectators ?? state.spectators;
+                    applySpectatorProtocolSnapshot(session.spectatorProtocol);
+                    applySpectatorZoneSnapshot(session.spectatorProtocolZones || session.spectatorZones || session.spectatorProtocol?.zones || null);
                 }
                 renderSnapshotLog(session.lastEvents);
                 renderState();
             } catch (error) {
                 appendLog(`Snapshot load failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        function updateHexHistory() {
+            console.log('ðŸ“Š updateHexHistory() called | total messages:', hexMessageHistory.length);
+            const hexHistoryListEl = document.getElementById('hexHistoryList');
+            if (!hexHistoryListEl) {
+                console.error('âŒ hexHistoryList element not found!');
+                return;
+            }
+            hexHistoryListEl.innerHTML = '';
+            const maxShow = 50;
+            const start = Math.max(0, hexMessageHistory.length - maxShow);
+            console.log('ðŸ“Š Rendering messages from', start, 'to', hexMessageHistory.length);
+
+            for (let i = start; i < hexMessageHistory.length; i++) {
+                const msg = hexMessageHistory[i];
+                const div = document.createElement('div');
+                div.style.cssText = 'padding:2px 4px;margin:1px 0;background:#0a0e27;border-left:2px solid #2f3945;cursor:pointer;transition:all 0.1s;';
+                const line = msg.line || `${msg.type}: ${msg.hex || ''}`;
+                div.title = msg.inspectable ? `${line}\n\nClick: inspeccionar\nShift+Click: copiar hex` : line;
+
+                const linePreview = line.substring(0, 120) + (line.length > 120 ? '...' : '');
+                div.textContent = `[${msg.index}] ${linePreview}`;
+
+                div.addEventListener('mouseenter', () => {
+                    div.style.background = '#1a1f2e';
+                    div.style.borderLeftColor = '#16c784';
+                });
+                div.addEventListener('mouseleave', () => {
+                    div.style.background = '#0a0e27';
+                    div.style.borderLeftColor = '#2f3945';
+                });
+
+                div.addEventListener('click', (event) => {
+                    if (msg.inspectable && !replayModeActive && !event.shiftKey) {
+                        hexInspectorContainer.classList.remove('hidden');
+                        updateHexInspector({
+                            type: 'game_msg',
+                            payload: msg.payload,
+                            raw: msg.raw,
+                        });
+                        return;
+                    }
+
+                    navigator.clipboard.writeText(msg.raw || msg.hex || line).then(() => {
+                        div.textContent = 'âœ“ Copiado';
+                        setTimeout(() => {
+                            div.textContent = `[${msg.index}] ${linePreview}`;
+                        }, 1500);
+                    });
+                });
+
+                hexHistoryListEl.appendChild(div);
+            }
+        }
+
+        function formatLiveRawDebugEvent(message, payload = {}) {
+            if (message === 'socket_send') {
+                return `SOCKET OUT ${payload.description} | hex=${payload.hex}`;
+            }
+            if (message === 'socket_frame') {
+                return `SOCKET IN frame #${payload.messageCount} | bytes=${payload.byteLength} | hex=${payload.hex}`;
+            }
+            if (message === 'socket_buffer_pending') {
+                return `SOCKET pending buffer | bytes=${payload.pendingBytes} | hex=${payload.pendingHex}`;
+            }
+            if (message === 'socket_segment') {
+                return `SOCKET ${payload.messageName} (0x${Number(payload.messageType).toString(16)}) | valid=${payload.isValid} | hex=${payload.segment}`;
+            }
+            if (message === 'socket_unhandled') {
+                return `UNHANDLED ${payload.messageName} (0x${Number(payload.messageType).toString(16)}) | hex=${payload.segment}`;
+            }
+            if (message === 'connection_open') {
+                return `CONNECTION OPEN room=${payload.roomId} host=${payload.serverHost}:${payload.serverPort}`;
+            }
+            if (message === 'connection_end') {
+                return `CONNECTION END room=${payload.roomId}`;
+            }
+            if (message === 'connection_error') {
+                return `CONNECTION ERROR ${payload.error}`;
+            }
+            if (message === 'stoc_error') {
+                return `STOC ERROR ${payload.errorTypeName || 'UNKNOWN'} | code=${payload.errorCode ?? '-'} | ${payload.message || ''}`.trim();
+            }
+            if (message === 'game_msg') {
+                return `${payload.type || 'UNHANDLED'} | hex=${payload.payloadHex || '-'}`;
+            }
+            return `${message} ${JSON.stringify(payload)}`;
+        }
+
+        function extractLiveHexValue(payload = {}) {
+            if (payload.payloadHex) return String(payload.payloadHex).toLowerCase();
+            if (payload.hex) return String(payload.hex).toLowerCase();
+            if (payload.pendingHex) return String(payload.pendingHex).toLowerCase();
+            if (payload.segment) return String(payload.segment).toLowerCase();
+            return null;
+        }
+
+        function isRawTransportCaptureType(message) {
+            return message === 'socket_send'
+                || message === 'socket_frame'
+                || message === 'socket_buffer_pending'
+                || message === 'socket_buffer_reset'
+                || message === 'socket_segment'
+                || message === 'socket_unhandled';
+        }
+
+        function buildTransportHistoryEntry(item, indexOverride = null) {
+            const type = item?.type || item?.message || 'unknown';
+            const payload = item?.payload || {};
+            const hexValue = extractLiveHexValue(payload);
+            const inspectable = (type === 'socket_segment' || type === 'socket_send') && !!hexValue;
+            return {
+                index: (indexOverride ?? Number(item?.index)) || (hexMessageHistory.length + 1),
+                type,
+                line: item?.line || formatLiveRawDebugEvent(type, payload),
+                hex: hexValue,
+                raw: payload?.payloadHex ? String(payload.payloadHex).toLowerCase() : hexValue,
+                payload,
+                inspectable,
+                timestamp: item?.timestamp || Date.now(),
+            };
+        }
+
+        function buildRawTransportExportEntry(item, indexOverride = null) {
+            const type = item?.type || item?.message || 'unknown';
+            const payload = item?.payload || {};
+            const hexValue = extractLiveHexValue(payload) || item?.hex || item?.raw || null;
+            return {
+                index: (indexOverride ?? Number(item?.index)) || 0,
+                type,
+                timestamp: item?.timestamp || Date.now(),
+                hex: typeof hexValue === 'string' ? hexValue.toLowerCase() : null,
+                raw: typeof hexValue === 'string' ? hexValue.toLowerCase() : null,
+            };
+        }
+
+        function hydrateTransportHistory(items) {
+            if (!Array.isArray(items) || items.length === 0) {
+                return false;
+            }
+
+            hexMessageHistory = items.map((item, index) => buildTransportHistoryEntry(item, index + 1));
+            liveHexSelectedIndex = hexMessageHistory.length > 0
+                ? Math.max(0, hexMessageHistory.length - 1)
+                : -1;
+
+            if (hexHistoryList) {
+                hexHistoryList.innerHTML = '';
+            }
+
+            if (!replayModeActive && hexInspectorContainer && !hexInspectorContainer.classList.contains('hidden')) {
+                renderLiveHexInspectorPanel();
+            }
+
+            return true;
+        }
+
+        function pushLiveRawDebugEvent(data) {
+            if (replayModeActive || !data?.message || !data?.payload) {
+                return;
+            }
+
+            if (!isRawTransportCaptureType(data.message)) {
+                return;
+            }
+
+            hexMessageHistory.push(buildTransportHistoryEntry({
+                type: data.message,
+                payload: data.payload,
+                timestamp: Date.now(),
+            }));
+
+            if (liveHexSelectedIndex < 0) {
+                liveHexSelectedIndex = Math.max(0, hexMessageHistory.length - 1);
+            }
+
+            // Actualizar el panel siempre que haya nuevos mensajes en LIVE DUEL
+            if (hexInspectorContainer && !hexInspectorContainer.classList.contains('hidden')) {
+                renderLiveHexInspectorPanel();
+            }
+        }
+
+        function renderLiveHexInspectorDetails(msg) {
+            if (!msg) {
+                hexInspectorTitle.textContent = 'Live Raw Debug Stream';
+                fieldsTableBody.innerHTML = '<tr><td colspan="5" style="color:#666;padding:4px">Sin selecciÃ³n</td></tr>';
+                return;
+            }
+
+            hexInspectorTitle.textContent = msg.payload?.type
+                ? `${msg.payload.type} | live raw`
+                : `${msg.type} | live raw`;
+
+            const hexValue = msg.raw || msg.hex || '-';
+            const rows = [
+                ['event', msg.type || '-'],
+                ['rawType', msg.payload?.rawType ?? '-'],
+                ['messageName', msg.payload?.messageName ?? '-'],
+                ['bytes', hexValue && hexValue !== '-' ? Math.floor(String(hexValue).length / 2) : '-'],
+                ['hex', hexValue],
+            ];
+
+            fieldsTableBody.innerHTML = rows.map(([field, value]) => `
+                <tr>
+                    <td style="padding:2px 6px;color:#16c784;font-weight:bold;">${field}</td>
+                    <td colspan="4" style="padding:2px 6px;color:#fff;word-break:break-all;">${String(value)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderLiveHexInspectorPanel() {
+            if (replayModeActive) {
+                return;
+            }
+
+            if (!hexViewerPane) return;
+
+            hexViewerPane.innerHTML = '';
+
+            if (!hexMessageHistory.length) {
+                hexViewerPane.textContent = 'Esperando mensajes hex...';
+                return;
+            }
+
+            if (liveHexSelectedIndex < 0 || liveHexSelectedIndex >= hexMessageHistory.length) {
+                liveHexSelectedIndex = hexMessageHistory.length - 1;
+            }
+
+            const maxShow = 80;
+            const start = Math.max(0, hexMessageHistory.length - maxShow);
+            for (let i = start; i < hexMessageHistory.length; i++) {
+                const msg = hexMessageHistory[i];
+                const line = msg.line || `${msg.type}: ${msg.hex || ''}`;
+                const row = document.createElement('div');
+                row.style.cssText = [
+                    'padding:4px 6px',
+                    'margin:0 0 4px 0',
+                    'border-left:2px solid #2f3945',
+                    'background:#0a0e27',
+                    'cursor:pointer',
+                    'white-space:pre-wrap',
+                    'word-break:break-word',
+                    'font-size:9px',
+                    'color:#c2bed3'
+                ].join(';');
+
+                if (i === liveHexSelectedIndex) {
+                    row.style.borderLeftColor = '#16c784';
+                    row.style.background = '#12192b';
+                    row.style.color = '#16c784';
+                }
+
+                row.textContent = `[${msg.index}] ${line}`;
+                row.title = `${line}\n\nClick: seleccionar\nShift+Click: copiar hex`;
+                row.addEventListener('click', (event) => {
+                    liveHexSelectedIndex = i;
+                    if (event.shiftKey) {
+                        navigator.clipboard.writeText(msg.raw || msg.hex || line).catch(() => {});
+                    }
+                    renderLiveHexInspectorPanel();
+                    // Mostrar detalles del mensaje en el lado derecho
+                    renderLiveHexInspectorDetails(msg);
+                });
+                hexViewerPane.appendChild(row);
+            }
+        }
+
+        async function processHexFile(file) {
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                console.log('ðŸ“„ Archivo cargado:', data);
+
+                if (!Array.isArray(data.messages)) {
+                    throw new Error('Formato de archivo invÃ¡lido: se espera un array de mensajes');
+                }
+
+                hexMessageHistory = [];
+                liveHexSelectedIndex = -1;
+
+                data.messages.forEach((msg, idx) => {
+                    hexMessageHistory.push({
+                        index: idx + 1,
+                        type: msg.type,
+                        timestamp: msg.timestamp || Date.now(),
+                        hex: msg.hex,
+                        raw: msg.raw,
+                        line: msg.line || `${msg.type}: ${msg.hex}`,
+                        payload: msg.payload || {},
+                        inspectable: msg.type === 'game_msg',
+                    });
+                });
+
+                appendLog(`âœ… Cargados ${hexMessageHistory.length} mensajes hex`);
+                console.log(`âœ… Cargados ${hexMessageHistory.length} mensajes hex`);
+
+                // Mostrar los mensajes en el inspector
+                if (!hexInspectorContainer.classList.contains('hidden')) {
+                    renderLiveHexInspectorPanel();
+                }
+
+                return true;
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                appendLog(`âŒ Error cargando archivo: ${msg}`);
+                console.error('âŒ Error procesando archivo hex:', error);
+                return false;
+            }
+        }
+
+        function playHexMessagesAsReplay() {
+            if (hexMessageHistory.length === 0) {
+                appendLog('âŒ No hay mensajes hex cargados para reproducir');
+                return;
+            }
+
+            try {
+                // Convertir mensajes hex a formato de replay
+                const replayData = {
+                    startTime: Date.now(),
+                    initialState: null,
+                    messages: hexMessageHistory.map((msg, idx) => ({
+                        timestamp: idx * 100, // Espaciar 100ms entre mensajes
+                        type: msg.type,
+                        hex: msg.hex,
+                        raw: msg.raw,
+                        line: msg.line,
+                        payload: msg.payload || {},
+                        index: msg.index,
+                    })),
+                };
+
+                // Guardar en localStorage
+                localStorage.setItem('duelReplayData', JSON.stringify(replayData));
+                localStorage.setItem('duelReplayMode', 'true');
+
+                appendLog(`âœ… Guardado replay con ${hexMessageHistory.length} mensajes hex`);
+                console.log(`âœ… Replay guardado - abriendo viewer en modo replay`);
+
+                // Abrir viewer en modo replay (sin sessionId para que cargue desde localStorage)
+                setTimeout(() => {
+                    window.location.href = window.location.pathname + '?view=duel';
+                }, 500);
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                appendLog(`âŒ Error iniciando replay: ${msg}`);
+                console.error('âŒ Error en playHexMessagesAsReplay:', error);
             }
         }
 
@@ -3487,22 +4118,116 @@
                 return;
             }
 
+            console.log('ðŸ“¨ Evento recibido:', data.message, '| replayMode:', replayModeActive);
+
             if (data.message === 'close' && data.uniqueId === uniqueId) {
                 window.close();
             }
 
-            handleEventData(data);
-        });
-
-        function handleEventData(data) {
-            // Reiniciar captura cuando se abre conexión de duelo (nueva sala)
+            // CAPTURA DE MENSAJES: hacer ANTES de procesarlos
             if (data.message === 'connection_open') {
+                console.log('ðŸ”Œ connection_open detectado | replayMode:', replayModeActive);
                 duelCapture.messages = [];
                 duelCapture.startTime = Date.now();
                 duelCapture.initialState = null;
-                hexMessageHistory = [];
-                console.log('📊 Captura lista. Esperando MSG_START...');
+                // Reiniciar historial de mensajes hex en modo live
+                if (!replayModeActive) {
+                    hexMessageHistory = [];
+                    liveHexSelectedIndex = -1;
+                    console.log('âœ“ Historial reiniciado');
+                    // Limpiar el contenedor visual tambiÃ©n
+                    if (hexHistoryList) {
+                        hexHistoryList.innerHTML = '';
+                    }
+                }
+
+                // Mostrar botÃ³n Inspeccionar Hex en LIVE DUEL
+                if (hexInspectorToggle) {
+                    hexInspectorToggle.classList.remove('hidden');
+                    console.log('âœ“ BotÃ³n Inspeccionar Hex mostrado');
+                }
             }
+
+            handleEventData(data);
+
+            // CAPTURA DESPUÃ‰S de procesar: para que stateAfter tenga el estado actualizado
+            if (data.message === 'game_msg' && data.payload?.type && duelCapture.enabled) {
+                duelCapture.messages.push({
+                    timestamp: Date.now() - duelCapture.startTime,
+                    type: data.payload.type,
+                    payload: JSON.parse(JSON.stringify(data.payload)),
+                    stateAfter: JSON.parse(JSON.stringify(state)),
+                    raw: data.payload.payloadHex ?? null,
+                });
+            }
+
+            // Capturar TODOS los mensajes en modo LIVE (igual que Raw Debug)
+            pushLiveRawDebugEvent(data);
+            if (false && !replayModeActive && data.message && data.payload) {
+                let hexValue = null;
+
+                // Extraer hex segÃºn el tipo de mensaje
+                if (data.payload.payloadHex) {
+                    hexValue = data.payload.payloadHex;
+                } else if (data.payload.hex) {
+                    hexValue = data.payload.hex;
+                } else if (data.payload.pendingHex) {
+                    hexValue = data.payload.pendingHex;
+                } else if (data.payload.segment) {
+                    hexValue = data.payload.segment;
+                } else {
+                    hexValue = JSON.stringify(data.payload).substring(0, 100);
+                }
+
+                hexMessageHistory.push({
+                    index: hexMessageHistory.length + 1,
+                    type: data.message,
+                    hex: hexValue,
+                    payload: data.payload,
+                    timestamp: Date.now()
+                });
+                console.log('ðŸ“¡ Mensaje capturado [' + hexMessageHistory.length + ']: ' + data.message + ' | hex:', hexValue);
+
+                // Mostrar en inspector hex si estÃ¡ abierto (en modo live)
+                if (!replayModeActive && hexHistoryContainer && !hexHistoryContainer.classList.contains('hidden')) {
+                    console.log('Actualizando UI porque hexHistoryContainer estÃ¡ visible');
+                    updateHexHistory();
+                }
+            }
+        });
+
+        function forwardEventToBoardEngine(data) {
+            if (!babylonRenderer || typeof babylonRenderer.applySpectatorEvent !== 'function' || !data) {
+                return;
+            }
+
+            if (data.message === 'game_msg' && data.payload?.type) {
+                babylonRenderer.applySpectatorEvent(data.payload);
+                return;
+            }
+
+            if (data.message === 'waiting_watch_change' && data.payload) {
+                babylonRenderer.applySpectatorEvent({
+                    type: 'WATCH_CHANGE',
+                    count: data.payload.count ?? 0,
+                });
+                return;
+            }
+
+            if (data.message === 'duel_start') {
+                babylonRenderer.applySpectatorEvent({ type: 'DUEL_START' });
+                return;
+            }
+
+            if (data.message === 'duel_end') {
+                babylonRenderer.applySpectatorEvent({ type: 'DUEL_END' });
+                return;
+            }
+        }
+
+        function handleEventData(data) {
+            // connection_open ya se captura en el listener de events (antes de procesar)
+            forwardEventToBoardEngine(data);
 
             if (data.message === 'connection_open') {
                 state.room = data.payload.room || state.room;
@@ -3623,6 +4348,20 @@
                 renderState();
             }
 
+            if (data.message === 'spectator_state') {
+                applySpectatorProtocolSnapshot(data.payload?.snapshot);
+                appendLog(`Spectator protocol state | events=${data.payload?.eventCount ?? 0} | last=${data.payload?.snapshot?.lastEventType || 'unknown'}`);
+                renderState();
+            }
+
+            if (data.message === 'spectator_zones') {
+                applySpectatorZoneSnapshot(data.payload?.zones);
+                appendLog(
+                    `Spectator protocol zones | grave P0=${data.payload?.zones?.graves?.[0]?.length ?? 0} P1=${data.payload?.zones?.graves?.[1]?.length ?? 0} | banished P0=${data.payload?.zones?.banished?.[0]?.length ?? 0} P1=${data.payload?.zones?.banished?.[1]?.length ?? 0}`
+                );
+                renderState();
+            }
+
             if (data.message === 'rps_result') {
                 state.rps = data.payload;
                 appendLog(`RPS result: ${data.payload.choice1Name} vs ${data.payload.choice2Name} -> ${data.payload.result}`);
@@ -3719,6 +4458,9 @@
                 appendLog(
                     `RELOAD_FIELD_TRANSLATED | mzone/szone=${zones.length} | hand P0=${state.hands[0].length} P1=${state.hands[1].length} | grave P0=${grave0} P1=${grave1}`
                 );
+                if (babylonRenderer && typeof babylonRenderer.syncBoardEngineState === 'function') {
+                    babylonRenderer.syncBoardEngineState(state);
+                }
                 renderState();
             }
 
@@ -3787,10 +4529,10 @@
                     if (Number.isFinite(lp1) && lp1 > 0) state.playerLp[1] = Math.round(lp1);
                     if (payload.deck0 !== null && payload.deck0 !== undefined) state.pileCounts.deck[0] = Number(payload.deck0);
                     if (payload.deck1 !== null && payload.deck1 !== undefined) state.pileCounts.deck[1] = Number(payload.deck1);
-                    // Capturar estado inicial DESPUÉS de procesar MSG_START
+                    // Capturar estado inicial DESPUÃ‰S de procesar MSG_START
                     if (duelCapture.initialState === null) {
                         duelCapture.initialState = JSON.parse(JSON.stringify(state));
-                        console.log('📊 Estado inicial capturado DESPUÉS de MSG_START');
+                        console.log('ðŸ“Š Estado inicial capturado DESPUÃ‰S de MSG_START');
                     }
                 }
 
@@ -3940,7 +4682,7 @@
                         ];
                     }
 
-                    // Sincronizar handSnapshots después de modificar manos
+                    // Sincronizar handSnapshots despuÃ©s de modificar manos
                     syncHandSnapshot(mappedPrevController);
                     syncHandSnapshot(mappedCurrController);
 
@@ -4281,7 +5023,7 @@
 
                     if (currentStateFieldKey && currentFieldKey) {
                         setCardDebug(`pos_change | cell=${currentFieldKey} | prev=${payload.previousPosition} | curr=${payload.currentPosition} | code=${formatCardId(normalizeCardCode(payload.code))}`);
-                        appendLog(`POS_CHANGE | cell=${currentFieldKey} | position: ${payload.previousPosition} → ${payload.currentPosition}`);
+                        appendLog(`POS_CHANGE | cell=${currentFieldKey} | position: ${payload.previousPosition} â†’ ${payload.currentPosition}`);
 
                         const zoneSnapshotKey = getZoneSnapshotKey(mappedPlayer, normalizedLocation);
                         const previousZoneSnapshot = state.fieldUpdateSnapshots[zoneSnapshotKey] || {};
@@ -4296,7 +5038,7 @@
                             flags: state.field[currentStateFieldKey]?.flags ?? null,
                         });
 
-                        // Si la posición cambió, aplicar
+                        // Si la posiciÃ³n cambiÃ³, aplicar
                         if (!areCardSnapshotsEqual(previousEntrySnapshot, nextEntrySnapshot)) {
                             applyFieldEntryDiff({
                                 code: state.field[currentStateFieldKey]?.code ?? normalizeCardCode(payload.code) ?? null,
@@ -4351,19 +5093,12 @@
                 }
             }
 
-            // Capturar mensaje DESPUÉS de procesarlo (para que stateAfter refleje el estado real)
-            if (data.message === 'game_msg' && data.payload?.type && duelCapture.enabled) {
-                duelCapture.messages.push({
-                    timestamp: Date.now() - duelCapture.startTime,
-                    type: data.message,
-                    payload: JSON.parse(JSON.stringify(data.payload)),
-                    stateAfter: JSON.parse(JSON.stringify(state)),
-                    raw: data.payload.payloadHex ?? null,
-                });
+            // Capturar mensaje DESPUÃ‰S de procesarlo (para que stateAfter refleje el estado real)
+            if (false && data.message === 'game_msg' && data.payload?.type && duelCapture.enabled) {
             }
 
             // Agregar a historial hex en LIVE duel (modo streaming, no replay)
-            if (!replayModeActive && data.message === 'game_msg' && data.payload?.type) {
+            if (false && !replayModeActive && data.message === 'game_msg' && data.payload?.type) {
                 const hexStr = (data.payload?.payloadHex || data.payload?.raw || '??').toLowerCase();
                 hexMessageHistory.push({
                     index: hexMessageHistory.length + 1,
@@ -4371,12 +5106,14 @@
                     hex: hexStr,
                     timestamp: Date.now()
                 });
-                console.log(`📡 Mensaje hex capturado [${hexMessageHistory.length}]: ${data.payload.type}`);
-                // Mostrar el historial
-                if (hexHistoryContainer) {
-                    hexHistoryContainer.style.display = 'block';
-                }
+                console.log(`ðŸ“¡ Mensaje hex capturado [${hexMessageHistory.length}]: ${data.payload.type}`);
+                // Mostrar el historial si estÃ¡ abierto
+            if (hexHistoryContainer && !hexHistoryContainer.classList.contains('hidden')) {
                 updateHexHistory();
+            }
+            if (hexInspectorContainer && !hexInspectorContainer.classList.contains('hidden') && !replayModeActive) {
+                renderLiveHexInspectorPanel();
+            }
             }
         }
 
@@ -4860,10 +5597,18 @@
             const fieldsTableBody = document.getElementById('fieldsTableBody');
             const hexHistoryContainer = document.getElementById('hexHistoryContainer');
             const hexHistoryList = document.getElementById('hexHistoryList');
-            let hexMessageHistory = [];
+            const hexHistoryHeader = hexHistoryContainer ? hexHistoryContainer.querySelector('div') : null;
+            // Usar la variable global hexMessageHistory declarada en el scope principal
 
-            // Mostrar botón toggle
+            // Mostrar botÃ³n toggle
             hexInspectorToggle.classList.remove('hidden');
+            if (hexHistoryHeader) {
+                hexHistoryHeader.textContent = 'Live Raw Debug Stream';
+            }
+            if (hexHistoryContainer) {
+                hexHistoryContainer.classList.add('hidden');
+            }
+            console.log('âœ“ BotÃ³n hexInspectorToggle mostrado | replayMode:', replayModeActive, '| hexMessageHistory:', hexMessageHistory.length);
 
             // Restaurar estado del inspector si estaba abierto (para modo replay)
             if (replayModeActive && localStorage.getItem('hexInspectorOpen') === 'true') {
@@ -4872,19 +5617,29 @@
             }
 
             hexInspectorToggle.addEventListener('click', () => {
-                hexInspectorContainer.classList.toggle('hidden');
-                // Guardar estado para modo replay
-                if (replayModeActive) {
+                console.log('ðŸ” Click en Inspeccionar Hex | replayMode:', replayModeActive, '| hidden:', hexHistoryContainer.classList.contains('hidden'), '| historyLength:', hexMessageHistory.length);
+                // En modo live: mostrar historial de mensajes
+                if (!replayModeActive) {
+                    hexInspectorContainer.classList.toggle('hidden');
+                    console.log('Toggle hexInspectorContainer | now hidden:', hexInspectorContainer.classList.contains('hidden'));
+                    if (!hexInspectorContainer.classList.contains('hidden')) {
+                        console.log('Llamando renderLiveHexInspectorPanel() con', hexMessageHistory.length, 'mensajes');
+                        renderLiveHexInspectorPanel();
+                    }
+                } else {
+                    // En modo replay: mostrar inspector individual
+                    hexInspectorContainer.classList.toggle('hidden');
+                    // Guardar estado para modo replay
                     if (!hexInspectorContainer.classList.contains('hidden')) {
                         localStorage.setItem('hexInspectorOpen', 'true');
                     } else {
                         localStorage.removeItem('hexInspectorOpen');
                     }
-                }
-                // Si se acaba de abrir y hay un mensaje pendiente
-                if (!hexInspectorContainer.classList.contains('hidden') && hexInspectorContainer._lastMsg) {
-                    updateHexInspector(hexInspectorContainer._lastMsg);
-                    hexInspectorContainer._lastMsg = null;
+                    // Si se acaba de abrir y hay un mensaje pendiente
+                    if (!hexInspectorContainer.classList.contains('hidden') && hexInspectorContainer._lastMsg) {
+                        updateHexInspector(hexInspectorContainer._lastMsg);
+                        hexInspectorContainer._lastMsg = null;
+                    }
                 }
             });
             hexInspectorClose.addEventListener('click', () => {
@@ -4900,7 +5655,7 @@
                 const rawType = msg.payload?.rawType ?? '??';
                 const hex = raw ? String(raw).toLowerCase() : null;
 
-                // Título
+                // TÃ­tulo
                 hexInspectorTitle.textContent = `${msgType} (0x${Number(rawType).toString(16).padStart(2,'0').toUpperCase()})`;
 
                 // ---- Hex Viewer ----
@@ -5057,7 +5812,7 @@
                         }
                     });
 
-                    // Información resumida
+                    // InformaciÃ³n resumida
                     const infoTr = document.createElement('tr');
                     infoTr.style.cssText = 'background:#0d111c;border-top:1px solid #2f3945;';
                     infoTr.innerHTML = `
@@ -5111,13 +5866,13 @@
                     });
                 }
 
-                // ---- Correlación bidireccional ----
+                // ---- CorrelaciÃ³n bidireccional ----
                 function clearHl() {
                     hexViewerPane.querySelectorAll('.hex-byte.hl').forEach(el => el.classList.remove('hl'));
                     fieldsTableBody.querySelectorAll('tr.hl-row').forEach(el => el.classList.remove('hl-row'));
                 }
 
-                // Hover en fila → resalta bytes
+                // Hover en fila â†’ resalta bytes
                 fieldsTableBody.querySelectorAll('tr').forEach((tr) => {
                     if (!tr.dataset.fieldStart) return;
                     tr.addEventListener('mouseenter', () => {
@@ -5133,7 +5888,7 @@
                     tr.addEventListener('mouseleave', clearHl);
                 });
 
-                // Hover en byte → resalta fila correspondiente
+                // Hover en byte â†’ resalta fila correspondiente
                 hexViewerPane.querySelectorAll('.hex-byte').forEach((b) => {
                     b.addEventListener('mouseenter', () => {
                         clearHl();
@@ -5154,43 +5909,6 @@
                 });
             }
 
-            function updateHexHistory() {
-                hexHistoryList.innerHTML = '';
-                const maxShow = 50;
-                const start = Math.max(0, hexMessageHistory.length - maxShow);
-
-                for (let i = start; i < hexMessageHistory.length; i++) {
-                    const msg = hexMessageHistory[i];
-                    const div = document.createElement('div');
-                    div.style.cssText = 'padding:2px 4px;margin:1px 0;background:#0a0e27;border-left:2px solid #2f3945;cursor:pointer;transition:all 0.1s;';
-                    div.title = msg.hex;
-
-                    const hexPreview = msg.hex.substring(0, 16) + (msg.hex.length > 16 ? '...' : '');
-                    div.textContent = `[${msg.index}] ${msg.type}: ${hexPreview}`;
-
-                    div.addEventListener('mouseenter', () => {
-                        div.style.background = '#1a1f2e';
-                        div.style.borderLeftColor = '#16c784';
-                    });
-                    div.addEventListener('mouseleave', () => {
-                        div.style.background = '#0a0e27';
-                        div.style.borderLeftColor = '#2f3945';
-                    });
-
-                    // Click para copiar al portapapeles
-                    div.addEventListener('click', () => {
-                        navigator.clipboard.writeText(msg.hex).then(() => {
-                            div.textContent = '✓ Copiado';
-                            setTimeout(() => {
-                                div.textContent = `[${msg.index}] ${msg.type}: ${hexPreview}`;
-                            }, 1500);
-                        });
-                    });
-
-                    hexHistoryList.appendChild(div);
-                }
-            }
-
             window.addEventListener('message', (event) => {
                 const data = event.data;
                 if (!data || !data.type) return;
@@ -5200,56 +5918,183 @@
                     replayMessageCount++;
 
                     if (!msg || !msg.type) {
-                        console.warn(`Replay mensaje ${replayMessageCount}: datos inválidos`, msg);
+                        console.warn(`Replay mensaje ${replayMessageCount}: datos invÃ¡lidos`, msg);
                         return;
                     }
 
                     console.log(`Replay ${replayMessageCount}: ${msg.type}`, msg);
 
                     try {
+                        const decodedReplay = window.DuelMessageDecoder?.decodeMessageRecord(msg);
+                        const normalizedMessage = decodedReplay?.normalizedMessage || msg;
+                        const normalizedReplayPayload = decodedReplay?.replayPayload || normalizedMessage.payload;
+                        const normalizedReplayMessage = normalizedReplayPayload?.type ? 'game_msg' : normalizedMessage.type;
+
                         handleEventData({
-                            message: msg.type,
-                            payload: msg.payload
+                            message: normalizedReplayMessage,
+                            payload: normalizedReplayPayload
                         });
                         renderState();
 
-                        // Actualizar inspector hex si está abierto
+                        // Actualizar inspector hex si estÃ¡ abierto
                         if (!hexInspectorContainer.classList.contains('hidden')) {
-                            updateHexInspector(msg);
+                            updateHexInspector(normalizedMessage);
                         } else {
-                            // Guardar para mostrar si el usuario abre el inspector después
-                            hexInspectorContainer._lastMsg = msg;
+                            // Guardar para mostrar si el usuario abre el inspector despuÃ©s
+                            hexInspectorContainer._lastMsg = normalizedMessage;
                         }
 
                         // Agregar a historial de mensajes hex
-                        if (msg.raw || msg.payload?.payloadHex) {
-                            const hexStr = (msg.raw || msg.payload?.payloadHex || '').toLowerCase();
+                        if (normalizedMessage.raw || normalizedMessage.payload?.payloadHex) {
+                            const hexStr = (normalizedMessage.raw || normalizedMessage.payload?.payloadHex || '').toLowerCase();
                             hexMessageHistory.push({
                                 index: replayMessageCount,
-                                type: msg.type,
+                                type: normalizedMessage.type,
                                 hex: hexStr,
-                                timestamp: msg.timestamp || Date.now()
+                                timestamp: normalizedMessage.timestamp || Date.now()
                             });
                             updateHexHistory();
                         }
 
-                        // Debug: mostrar el estado del field después de procesar
+                        // Debug: mostrar el estado del field despuÃ©s de procesar
                         if (replayMessageCount % 5 === 0) {
                             console.log(`[DEBUG ${replayMessageCount}] state.field:`, Object.keys(state.field || {}).length, 'cartas');
                             console.log(`[DEBUG ${replayMessageCount}] state.hands[0]:`, (state.hands[0] || []).length, 'state.hands[1]:', (state.hands[1] || []).length);
                         }
-                        console.log(`✓ Mensaje ${replayMessageCount} procesado`);
+                        console.log(`âœ“ Mensaje ${replayMessageCount} procesado`);
                     } catch (err) {
-                        console.error(`✗ Error procesando mensaje ${replayMessageCount}:`, err);
-                        appendLog(`❌ Error en replay: ${err.message}`);
+                        console.error(`âœ— Error procesando mensaje ${replayMessageCount}:`, err);
+                        appendLog(`âŒ Error en replay: ${err.message}`);
                     }
                 }
             });
 
-            console.log('✅ Listener de postMessage para replay activado');
+            console.log('âœ… Listener de postMessage para replay activado');
         }
+
+        // ============ SETUP OFFLINE LOAD MODAL ============
+        (function setupOfflineLoadModal() {
+            if (!offlineLoadModal || hasLiveSessionId) return;
+
+            if (offlineHexLoadBtn) {
+                offlineHexLoadBtn.addEventListener('click', async () => {
+                    const file = offlineHexInput.files[0];
+                    if (!file) {
+                        alert('Por favor selecciona un archivo JSON');
+                        return;
+                    }
+
+                    const success = await processHexFile(file);
+                    if (success) {
+                        offlineLoadModal.classList.add('hidden');
+                        playHexMessagesAsReplay();
+                    }
+                });
+            }
+
+            if (offlineHexCancelBtn) {
+                offlineHexCancelBtn.addEventListener('click', () => {
+                    alert('Esperando conexiÃ³n a duelo en vivo o carga de archivo hex');
+                });
+            }
+
+            // Click en el input cuando el botÃ³n de carga es presionado
+            if (offlineHexInput) {
+                offlineHexInput.addEventListener('change', () => {
+                    // Prepara el archivo para cargar
+                });
+            }
+        })();
+
+        // ============ SETUP GLOBAL DEL BOTÃ“N INSPECCIONAR HEX ============
+        // Este cÃ³digo se ejecuta siempre, independientemente del modo
+        (function setupHexInspectorButton() {
+            const hexInspectorToggle = document.getElementById('hexInspectorToggle');
+            const hexInspectorContainer = document.getElementById('hexInspectorContainer');
+            const hexInspectorClose = document.getElementById('hexInspectorClose');
+
+            if (!hexInspectorToggle || !hexInspectorContainer) {
+                console.warn('âš ï¸ Elementos del Hex Inspector no encontrados');
+                return;
+            }
+
+            // Toggle button click
+            hexInspectorToggle.addEventListener('click', () => {
+                hexInspectorContainer.classList.toggle('hidden');
+                console.log('ðŸ” Inspeccionar Hex toggled | hidden:', hexInspectorContainer.classList.contains('hidden'));
+                if (!hexInspectorContainer.classList.contains('hidden') && !replayModeActive) {
+                    renderLiveHexInspectorPanel();
+                }
+            });
+
+            // Load button click
+            const hexLoadButton = document.getElementById('hexLoadButton');
+            const hexLoadInput = document.getElementById('hexLoadInput');
+            const hexLoadOverlay = document.getElementById('hexLoadOverlay');
+            const hexLoadCancel = document.getElementById('hexLoadCancel');
+
+            if (hexLoadButton) {
+                hexLoadButton.addEventListener('click', () => {
+                    hexLoadOverlay.classList.remove('hidden');
+                    hexLoadInput.value = '';
+                    hexLoadInput.click();
+                });
+            }
+
+            if (hexLoadInput) {
+                hexLoadInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        await processHexFile(file);
+                        hexLoadOverlay.classList.add('hidden');
+                    }
+                });
+            }
+
+            if (hexLoadCancel) {
+                hexLoadCancel.addEventListener('click', () => {
+                    hexLoadOverlay.classList.add('hidden');
+                });
+            }
+
+            // Play button click
+            const hexPlayButton = document.getElementById('hexPlayButton');
+            if (hexPlayButton) {
+                hexPlayButton.addEventListener('click', () => {
+                    playHexMessagesAsReplay();
+                });
+            }
+
+            // Download button click
+            const hexDownloadButton = document.getElementById('hexDownloadButton');
+            if (hexDownloadButton) {
+                hexDownloadButton.addEventListener('click', () => {
+                    hexCapture.download();
+                });
+            }
+
+            // Close button click
+            if (hexInspectorClose) {
+                hexInspectorClose.addEventListener('click', () => {
+                    hexInspectorContainer.classList.add('hidden');
+                    console.log('ðŸ” Inspeccionar Hex closed');
+                });
+            }
+
+            // Abrir automÃ¡ticamente al cargar (solo en LIVE DUEL)
+            if (!replayModeActive) {
+                hexInspectorContainer.classList.remove('hidden');
+                // Render messages if any exist (connection_open already reset/populated hexMessageHistory)
+                if (typeof renderLiveHexInspectorPanel === 'function') {
+                    renderLiveHexInspectorPanel();
+                }
+                console.log('âœ“ Hex Inspector Container abierto en LIVE DUEL');
+            }
+        })();
 
     </script>
 </body>
 
 </html>
+
+

@@ -8,6 +8,12 @@ const MAX_QUERY_SUBITEMS = 256;
 const MAX_DRAW_CARDS = 120;
 const MAX_SHUFFLE_CARDS = 120;
 
+const GAME_MESSAGE_NAME_MAP = Object.fromEntries(
+    Object.entries(COMMON_MSG)
+        .filter(([key, value]) => key.startsWith('MSG_') && Number.isFinite(Number(value)))
+        .map(([key, value]) => [Number(value), key])
+);
+
 function toBuffer(segment) {
     return Buffer.isBuffer(segment) ? segment : Buffer.from(segment, 'hex');
 }
@@ -222,6 +228,10 @@ function parseGameMessage(segment) {
     const payload = buffer.slice(4);
 
     return { buffer, gameMessageType, payload };
+}
+
+function resolveGameMessageName(gameMessageType) {
+    return GAME_MESSAGE_NAME_MAP[Number(gameMessageType)] || 'UNHANDLED';
 }
 
 function createReader(buffer, offset = 0) {
@@ -941,6 +951,7 @@ function parseReloadFieldPayload(payload) {
 function handleGameMessage(segment, context = {}) {
     try {
         const { gameMessageType, payload } = parseGameMessage(segment);
+        const gameMessageName = resolveGameMessageName(gameMessageType);
 
         switch (gameMessageType) {
             case COMMON_MSG.MSG_START:
@@ -1100,6 +1111,14 @@ function handleGameMessage(segment, context = {}) {
             case COMMON_MSG.MSG_RELOAD_FIELD:
                 {
                     const reload = parseReloadFieldPayload(payload);
+                    emit(context.uniqueId, 'game_msg', {
+                        roomId: context.roomId,
+                        type: gameMessageName,
+                        rawType: gameMessageType,
+                        payloadHex: payload.toString('hex'),
+                        ...(reload || {}),
+                        clientFlow: context.clientFlow,
+                    });
                     emit(context.uniqueId, 'reload_field', {
                         roomId: context.roomId,
                         ...(reload || { payloadHex: payload.toString('hex') }),
@@ -1124,7 +1143,7 @@ function handleGameMessage(segment, context = {}) {
             default:
                 emit(context.uniqueId, 'game_msg', {
                     roomId: context.roomId,
-                    type: 'UNHANDLED',
+                    type: gameMessageName,
                     rawType: gameMessageType,
                     payloadHex: payload.toString('hex'),
                     clientFlow: context.clientFlow,
@@ -1156,6 +1175,8 @@ module.exports._test = {
     parseMoveCompact,
     parseMoveExtended,
     parseErrorPayload,
+    parseUpdateDataPayload,
+    resolveGameMessageName,
 };
 
 function handlePlayerEnter(segment, context = {}) {

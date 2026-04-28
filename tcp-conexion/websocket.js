@@ -7,6 +7,7 @@ const LAST_EVENTS_LIMIT = 80;
 const EDOPRO_LAST_EVENTS_LIMIT = 30;
 const STORE_EDOPRO_GAME_REPLAY = true;
 const EDOPRO_REPLAY_EVENTS_LIMIT = 1500;
+const TRANSPORT_EVENTS_LIMIT = 12000;
 const MAX_VISIBLE_HAND_CARDS = 120;
 
 function normalizeClientFlow(value, fallback = 'edopro') {
@@ -24,6 +25,23 @@ function mapProtocolPlayerByFlow(player, clientFlow) {
         return player;
     }
     return numeric;
+}
+
+function getStartingPlayerFromTypeChange(rawTypeChange) {
+    const numeric = Number(rawTypeChange);
+    if (!Number.isFinite(numeric)) {
+        return null;
+    }
+    return (numeric & 0x1) ? 1 : 0;
+}
+
+function getTurnPlayerFromSeed(startingPlayer, turnCount) {
+    const starter = Number(startingPlayer);
+    const turn = Number(turnCount);
+    if (!Number.isFinite(starter) || !Number.isFinite(turn) || turn <= 0) {
+        return null;
+    }
+    return (starter + ((turn - 1) % 2)) % 2;
 }
 
 function clearSessionCleanup(uniqueId) {
@@ -166,6 +184,32 @@ function shouldStoreLastEvent(type) {
     );
 }
 
+function normalizeSpectatorPhase(phase) {
+    const numeric = Number(phase);
+    if (!Number.isFinite(numeric)) {
+        return null;
+    }
+
+    if (numeric === 0x01) return 'phase:draw';
+    if (numeric === 0x02) return 'phase:standby';
+    if (numeric === 0x04) return 'phase:main1';
+    if (numeric === 0x08 || numeric === 0x10 || numeric === 0x20 || numeric === 0x40 || numeric === 0x80) return 'phase:battle';
+    if (numeric === 0x100) return 'phase:main2';
+    if (numeric === 0x200) return 'phase:end';
+    return `phase:${numeric}`;
+}
+
+function shouldStoreTransportEvent(type) {
+    return (
+        type === 'socket_send' ||
+        type === 'socket_frame' ||
+        type === 'socket_segment' ||
+        type === 'socket_buffer_pending' ||
+        type === 'socket_buffer_reset' ||
+        type === 'socket_unhandled'
+    );
+}
+
 function sanitizeLastEventPayload(type, payload = {}) {
     const sanitized = { ...payload };
     sanitized.clientFlow = normalizeClientFlow(payload.clientFlow, 'edopro');
@@ -176,6 +220,26 @@ function sanitizeLastEventPayload(type, payload = {}) {
 
     if (typeof sanitized.segment === 'string' && sanitized.segment.length > 160) {
         sanitized.segment = `${sanitized.segment.slice(0, 160)}...`;
+    }
+
+    return sanitized;
+}
+
+function sanitizeTransportPayload(type, payload = {}) {
+    const sanitized = { ...payload };
+    sanitized.clientFlow = normalizeClientFlow(payload.clientFlow, 'edopro');
+
+    if (typeof sanitized.hex === 'string') {
+        sanitized.hex = sanitized.hex.toLowerCase();
+    }
+    if (typeof sanitized.segment === 'string') {
+        sanitized.segment = sanitized.segment.toLowerCase();
+    }
+    if (typeof sanitized.pendingHex === 'string') {
+        sanitized.pendingHex = sanitized.pendingHex.toLowerCase();
+    }
+    if (typeof sanitized.payloadHex === 'string') {
+        sanitized.payloadHex = sanitized.payloadHex.toLowerCase();
     }
 
     return sanitized;
@@ -224,6 +288,52 @@ function applyFieldCard(session, controller, location, sequence, code, position)
         sequence,
         position: resolvedPosition,
     };
+}
+
+function getZoneSnapshotKey(controller, location) {
+    return `${controller}:${normalizeLocation(location)}`;
+}
+
+function getCardSnapshotValue(card, fallbackCode = null) {
+    if (!card) return null;
+    return {
+        code: normalizeCardCode(card.code) ?? normalizeCardCode(fallbackCode) ?? null,
+        controller: Number(card.controller),
+        location: normalizeLocation(card.location),
+        sequence: Number(card.sequence),
+        position: card.position ?? null,
+        flags: card.flags ?? null,
+    };
+}
+
+function areCardSnapshotsEqual(left, right) {
+    if (!left && !right) return true;
+    if (!left || !right) return false;
+    return (
+        Number(left.controller) === Number(right.controller) &&
+        Number(left.location) === Number(right.location) &&
+        Number(left.sequence) === Number(right.sequence) &&
+        Number(left.code ?? null) === Number(right.code ?? null) &&
+        Number(left.position ?? null) === Number(right.position ?? null) &&
+        Number(left.flags ?? null) === Number(right.flags ?? null)
+    );
+}
+
+function buildZoneSnapshot(cards, controller, location, fallbackCode = null) {
+    const snapshot = {};
+    (Array.isArray(cards) ? cards : []).forEach((card) => {
+        const sequence = Number(card?.sequence);
+        if (!Number.isFinite(sequence)) {
+            return;
+        }
+        snapshot[String(sequence)] = getCardSnapshotValue({
+            ...card,
+            controller,
+            location,
+            sequence,
+        }, fallbackCode);
+    });
+    return snapshot;
 }
 
 function getFieldKeyCandidates(controller, location, sequence) {
@@ -328,6 +438,8 @@ function ensureSession(uniqueId) {
             startingPlayer: null,
             players: [],
             spectators: 0,
+            spectatorProtocol: null,
+            spectatorZones: null,
             typeChange: null,
             rps: null,
             turnCount: 0,
@@ -335,9 +447,15 @@ function ensureSession(uniqueId) {
             playerTimeUpdatedAt: { 0: null, 1: null },
             hands: { 0: [], 1: [] },
             field: {},
+            fieldUpdateSnapshots: {},
+            handSnapshots: { 0: { count: 0 }, 1: { count: 0 } },
+            graveSnapshots: { 0: [], 1: [] },
+            banishedSnapshots: { 0: [], 1: [] },
             graves: { 0: [], 1: [] },
+            banished: { 0: [], 1: [] },
             pendingReveal: null,
             replayEvents: [],
+            transportEvents: [],
             lastEvents: [],
             mode: 'viewer',
             clientFlow: 'edopro',
@@ -355,6 +473,14 @@ function isEdoproSession(session) {
 
 function addEventToSession(session, type, payload) {
     const edoproSession = isEdoproSession(session);
+
+    if (shouldStoreTransportEvent(type)) {
+        pushBounded(session.transportEvents, {
+            type,
+            payload: sanitizeTransportPayload(type, payload),
+            timestamp: new Date().toISOString(),
+        }, TRANSPORT_EVENTS_LIMIT);
+    }
 
     if (shouldStoreLastEvent(type)) {
         // In EDOPro we intentionally avoid storing every game_msg as lastEvents
@@ -458,6 +584,11 @@ function updateSession(uniqueId, type, payload = {}) {
 
     if (type === 'waiting_type_change') {
         session.typeChange = payload.type ?? null;
+        const seededStartingPlayer = getStartingPlayerFromTypeChange(session.typeChange);
+        if (seededStartingPlayer !== null) {
+            session.startingPlayer = seededStartingPlayer;
+            session.turnPlayer = getTurnPlayerFromSeed(session.startingPlayer, session.turnCount);
+        }
     }
 
     if (type === 'waiting_state') {
@@ -467,7 +598,12 @@ function updateSession(uniqueId, type, payload = {}) {
         session.turnCount = 0;
         session.hands = { 0: [], 1: [] };
         session.field = {};
+        session.fieldUpdateSnapshots = {};
+        session.handSnapshots = { 0: { count: 0 }, 1: { count: 0 } };
+        session.graveSnapshots = { 0: [], 1: [] };
+        session.banishedSnapshots = { 0: [], 1: [] };
         session.graves = { 0: [], 1: [] };
+        session.banished = { 0: [], 1: [] };
         session.pendingReveal = null;
         session.replayEvents = [];
     }
@@ -508,6 +644,108 @@ function updateSession(uniqueId, type, payload = {}) {
         session.spectators = payload.count ?? 0;
     }
 
+    if (type === 'spectator_state') {
+        const snapshot = payload?.snapshot;
+        if (snapshot && typeof snapshot === 'object') {
+            session.spectatorProtocol = {
+                lp: Array.isArray(snapshot.lp) ? snapshot.lp : [null, null],
+                turnPlayer: snapshot.turnPlayer ?? null,
+                phase: snapshot.phase ?? null,
+                catchingUp: Boolean(snapshot.catchingUp),
+                watchCount: snapshot.watchCount ?? 0,
+                lastEventType: snapshot.lastEventType ?? null,
+                messageCount: payload.messageCount ?? null,
+                eventCount: payload.eventCount ?? 0,
+            };
+
+            const lp0 = Number(snapshot?.lp?.[0]);
+            const lp1 = Number(snapshot?.lp?.[1]);
+            if (Number.isFinite(lp0) || Number.isFinite(lp1)) {
+                session.playerLp = session.playerLp || { 0: null, 1: null };
+                if (Number.isFinite(lp0)) session.playerLp[0] = lp0;
+                if (Number.isFinite(lp1)) session.playerLp[1] = lp1;
+            }
+
+            if (snapshot.turnPlayer !== null && snapshot.turnPlayer !== undefined) {
+                session.turnPlayer = Number(snapshot.turnPlayer);
+            }
+
+            if (snapshot.phase !== null && snapshot.phase !== undefined) {
+                session.phase = normalizeSpectatorPhase(snapshot.phase);
+            }
+
+            if (snapshot.watchCount !== null && snapshot.watchCount !== undefined) {
+                session.spectators = Number(snapshot.watchCount) || 0;
+            }
+        }
+    }
+
+    if (type === 'spectator_zones') {
+        const zones = payload?.zones;
+        if (zones && typeof zones === 'object') {
+            session.spectatorZones = {
+                pileCounts: {
+                    deck: {
+                        0: zones?.pileCounts?.deck?.[0] ?? null,
+                        1: zones?.pileCounts?.deck?.[1] ?? null,
+                    },
+                },
+                graves: {
+                    0: Array.isArray(zones?.graves?.[0]) ? zones.graves[0].map((card) => ({ ...card })) : [],
+                    1: Array.isArray(zones?.graves?.[1]) ? zones.graves[1].map((card) => ({ ...card })) : [],
+                },
+                banished: {
+                    0: Array.isArray(zones?.banished?.[0]) ? zones.banished[0].map((card) => ({ ...card })) : [],
+                    1: Array.isArray(zones?.banished?.[1]) ? zones.banished[1].map((card) => ({ ...card })) : [],
+                },
+            };
+
+            session.pileCounts = session.pileCounts || { deck: { 0: null, 1: null } };
+            session.pileCounts.deck = {
+                0: zones?.pileCounts?.deck?.[0] ?? session.pileCounts?.deck?.[0] ?? null,
+                1: zones?.pileCounts?.deck?.[1] ?? session.pileCounts?.deck?.[1] ?? null,
+            };
+
+            if (zones.graves) {
+                session.graves = {
+                    0: Array.isArray(zones.graves[0]) ? zones.graves[0].map((card) => ({ ...card })) : session.graves?.[0] || [],
+                    1: Array.isArray(zones.graves[1]) ? zones.graves[1].map((card) => ({ ...card })) : session.graves?.[1] || [],
+                };
+                session.graveSnapshots = {
+                    0: session.graves[0].map((card) => ({
+                        code: card.code ?? null,
+                        sequence: card.sequence,
+                        position: card.position ?? null,
+                    })),
+                    1: session.graves[1].map((card) => ({
+                        code: card.code ?? null,
+                        sequence: card.sequence,
+                        position: card.position ?? null,
+                    })),
+                };
+            }
+
+            if (zones.banished) {
+                session.banished = {
+                    0: Array.isArray(zones.banished[0]) ? zones.banished[0].map((card) => ({ ...card })) : session.banished?.[0] || [],
+                    1: Array.isArray(zones.banished[1]) ? zones.banished[1].map((card) => ({ ...card })) : session.banished?.[1] || [],
+                };
+                session.banishedSnapshots = {
+                    0: session.banished[0].map((card) => ({
+                        code: card.code ?? null,
+                        sequence: card.sequence,
+                        position: card.position ?? null,
+                    })),
+                    1: session.banished[1].map((card) => ({
+                        code: card.code ?? null,
+                        sequence: card.sequence,
+                        position: card.position ?? null,
+                    })),
+                };
+            }
+        }
+    }
+
     if (type === 'reload_field') {
         session.phase = 'dueling';
         if (payload?.lp && typeof payload.lp === 'object') {
@@ -543,6 +781,7 @@ function updateSession(uniqueId, type, payload = {}) {
         session.field = {};
         session.hands = { 0: [], 1: [] };
         session.graves = { 0: [], 1: [] };
+        session.banished = { 0: [], 1: [] };
         session.pendingReveal = null;
 
         const handCounts = payload?.counts?.hand || {};
@@ -560,6 +799,26 @@ function updateSession(uniqueId, type, payload = {}) {
                 sequence: index,
             }));
         });
+
+        session.handSnapshots = {
+            0: { count: (session.hands[0] || []).length },
+            1: { count: (session.hands[1] || []).length },
+        };
+
+        session.graveSnapshots = {
+            0: session.graves[0].map((card) => ({
+                code: card.code ?? null,
+                sequence: card.sequence,
+                position: card.position ?? null,
+            })),
+            1: session.graves[1].map((card) => ({
+                code: card.code ?? null,
+                sequence: card.sequence,
+                position: card.position ?? null,
+            })),
+        };
+
+        session.banishedSnapshots = { 0: [], 1: [] };
 
         const zones = Array.isArray(payload?.zones) ? payload.zones : [];
         zones.forEach((zone) => {
@@ -643,6 +902,19 @@ function updateSession(uniqueId, type, payload = {}) {
             session.hands[playerKey] = [...(session.hands[playerKey] || []), ...createHiddenCards(1)];
         }
 
+        // Limpiar de snapshots de zona origen
+        if (prevLocation === 0x10) {
+            const playerKey = String(prevController);
+            session.graveSnapshots[playerKey] = (session.graveSnapshots[playerKey] || []).filter(
+                (card) => Number(card.sequence) !== Number(prevSequence)
+            );
+        } else if (prevLocation === 0x20) {
+            const playerKey = String(prevController);
+            session.banishedSnapshots[playerKey] = (session.banishedSnapshots[playerKey] || []).filter(
+                (card) => Number(card.sequence) !== Number(prevSequence)
+            );
+        }
+
         const prevFieldCandidates = getFieldKeyCandidates(prevController, prevLocation, prevSequence);
         const prevFieldKey = prevFieldCandidates.find((key) => {
             const candidate = session.field[key];
@@ -673,12 +945,39 @@ function updateSession(uniqueId, type, payload = {}) {
                 grave.push(graveEntry);
             }
             session.graves[String(currController)] = grave;
+            // Sincronizar graveSnapshots
+            session.graveSnapshots[String(currController)] = grave.map((card) => ({
+                code: card.code ?? null,
+                sequence: card.sequence,
+                position: card.position ?? null,
+            }));
             if (session.pileCounts?.grave) {
                 session.pileCounts.grave[String(currController)] = Math.max(
                     Number(session.pileCounts.grave[String(currController)] ?? 0),
                     grave.length
                 );
             }
+        } else if ((currLocation === 0x20) && currController !== null) {
+            const resolvedCode = code ?? previousFieldCard?.code ?? null;
+            const banished = Array.isArray(session.banished[String(currController)]) ? [...session.banished[String(currController)]] : [];
+            const existingIndex = banished.findIndex((item) => Number(item.sequence) === Number(currSequence));
+            const banishedEntry = {
+                code: resolvedCode ?? (existingIndex >= 0 ? banished[existingIndex]?.code ?? null : null),
+                position: currPosition,
+                sequence: currSequence,
+            };
+            if (existingIndex >= 0) {
+                banished[existingIndex] = { ...banished[existingIndex], ...banishedEntry };
+            } else {
+                banished.push(banishedEntry);
+            }
+            session.banished[String(currController)] = banished;
+            // Sincronizar banishedSnapshots
+            session.banishedSnapshots[String(currController)] = banished.map((card) => ({
+                code: card.code ?? null,
+                sequence: card.sequence,
+                position: card.position ?? null,
+            }));
         } else if (currFieldKey) {
             session.field[currFieldKey] = {
                 ...(session.field[currFieldKey] || {}),
@@ -692,14 +991,33 @@ function updateSession(uniqueId, type, payload = {}) {
     }
 
     if (type === 'game_msg' && payload.type === 'MSG_UPDATE_CARD') {
-        applyFieldCard(
-            session,
-            payload.player,
-            payload.location,
-            payload.sequence,
-            normalizeCardCode(payload.code) ?? session.pendingReveal?.code ?? null,
-            payload.position,
-        );
+        const normalizedPayloadLocation = normalizeLocation(payload.location);
+        const zoneSnapshotKey = getZoneSnapshotKey(payload.player, normalizedPayloadLocation);
+        const previousZoneSnapshot = session.fieldUpdateSnapshots[zoneSnapshotKey] || {};
+        const nextEntrySnapshot = getCardSnapshotValue({
+            code: normalizeCardCode(payload.code) ?? session.pendingReveal?.code ?? null,
+            controller: payload.player,
+            location: normalizedPayloadLocation,
+            sequence: payload.sequence,
+            position: payload.position,
+            flags: payload.flags ?? null,
+        });
+        const previousEntrySnapshot = previousZoneSnapshot[String(payload.sequence)] || null;
+
+        if (!areCardSnapshotsEqual(previousEntrySnapshot, nextEntrySnapshot)) {
+            applyFieldCard(
+                session,
+                payload.player,
+                normalizedPayloadLocation,
+                payload.sequence,
+                normalizeCardCode(payload.code) ?? session.pendingReveal?.code ?? null,
+                payload.position,
+            );
+            session.fieldUpdateSnapshots[zoneSnapshotKey] = {
+                ...previousZoneSnapshot,
+                [String(payload.sequence)]: nextEntrySnapshot,
+            };
+        }
         if ((payload.code ?? session.pendingReveal?.code ?? null) !== null) {
             session.pendingReveal = null;
         }
@@ -707,25 +1025,17 @@ function updateSession(uniqueId, type, payload = {}) {
 
     if (type === 'game_msg' && payload.type === 'MSG_UPDATE_DATA' && Array.isArray(payload.cards)) {
         const normalizedPayloadLocation = normalizeLocation(payload.location);
-        if (normalizedPayloadLocation === 0x04 || normalizedPayloadLocation === 0x08) {
-            const activeSequences = new Set(
-                payload.cards
-                    .map((card) => Number(card.sequence))
-                    .filter((sequence) => Number.isFinite(sequence))
-            );
+        const zoneSnapshotKey = getZoneSnapshotKey(payload.player, normalizedPayloadLocation);
+        const previousZoneSnapshot = session.fieldUpdateSnapshots[zoneSnapshotKey] || {};
+        const nextZoneSnapshot = buildZoneSnapshot(payload.cards, payload.player, normalizedPayloadLocation, session.pendingReveal?.code ?? null);
 
-            Object.keys(session.field).forEach((fieldKey) => {
-                const fieldCard = session.field[fieldKey];
-                if (!fieldCard) {
+        if (normalizedPayloadLocation === 0x04 || normalizedPayloadLocation === 0x08) {
+            Object.keys(previousZoneSnapshot).forEach((sequenceKey) => {
+                if (Object.prototype.hasOwnProperty.call(nextZoneSnapshot, sequenceKey)) {
                     return;
                 }
-
-                if (
-                    Number(fieldCard.controller) === Number(payload.player) &&
-                    Number(normalizeLocation(fieldCard.location)) === Number(normalizedPayloadLocation) &&
-                    Number.isFinite(Number(fieldCard.sequence)) &&
-                    !activeSequences.has(Number(fieldCard.sequence))
-                ) {
+                const fieldKey = getFieldCellKey(payload.player, normalizedPayloadLocation, Number(sequenceKey));
+                if (fieldKey) {
                     delete session.field[fieldKey];
                 }
             });
@@ -747,29 +1057,100 @@ function updateSession(uniqueId, type, payload = {}) {
                     grave.push(graveEntry);
                 }
                 session.graves[String(payload.player)] = grave;
+                // Sincronizar graveSnapshots
+                session.graveSnapshots[String(payload.player)] = grave.map((card) => ({
+                    code: card.code ?? null,
+                    sequence: card.sequence,
+                    position: card.position ?? null,
+                }));
+                if (fallbackCode !== null) {
+                    session.pendingReveal = null;
+                }
+            } else if (normalizedPayloadLocation === 0x20) {
+                const banished = Array.isArray(session.banished[String(payload.player)]) ? [...session.banished[String(payload.player)]] : [];
+                const existingIndex = banished.findIndex((item) => Number(item.sequence) === Number(card.sequence));
+                const banishedEntry = {
+                    code: fallbackCode ?? (existingIndex >= 0 ? banished[existingIndex]?.code ?? null : null),
+                    position: card.position,
+                    sequence: card.sequence,
+                };
+                if (existingIndex >= 0) {
+                    banished[existingIndex] = { ...banished[existingIndex], ...banishedEntry };
+                } else {
+                    banished.push(banishedEntry);
+                }
+                session.banished[String(payload.player)] = banished;
+                // Sincronizar banishedSnapshots
+                session.banishedSnapshots[String(payload.player)] = banished.map((card) => ({
+                    code: card.code ?? null,
+                    sequence: card.sequence,
+                    position: card.position ?? null,
+                }));
                 if (fallbackCode !== null) {
                     session.pendingReveal = null;
                 }
             } else {
-                applyFieldCard(
-                    session,
-                    payload.player,
-                    normalizedPayloadLocation,
-                    card.sequence,
-                    fallbackCode,
-                    card.position,
-                );
+                const nextEntrySnapshot = nextZoneSnapshot[String(card.sequence)] || null;
+                const previousEntrySnapshot = previousZoneSnapshot[String(card.sequence)] || null;
+                if (!areCardSnapshotsEqual(previousEntrySnapshot, nextEntrySnapshot)) {
+                    applyFieldCard(
+                        session,
+                        payload.player,
+                        normalizedPayloadLocation,
+                        card.sequence,
+                        fallbackCode,
+                        card.position,
+                    );
+                }
                 if (fallbackCode !== null) {
                     session.pendingReveal = null;
                 }
             }
         });
+        session.fieldUpdateSnapshots[zoneSnapshotKey] = nextZoneSnapshot;
+    }
+
+    if (type === 'game_msg' && payload.type === 'MSG_POS_CHANGE') {
+        const normalizedLocation = normalizeLocation(payload.location);
+        const fieldKey = getFieldCellKey(payload.controller, normalizedLocation, payload.sequence);
+
+        if (fieldKey && session.field[fieldKey]) {
+            const previousZoneSnapshot = session.fieldUpdateSnapshots[getZoneSnapshotKey(payload.controller, normalizedLocation)] || {};
+            const previousEntrySnapshot = previousZoneSnapshot[String(payload.sequence)] || null;
+
+            const nextEntrySnapshot = getCardSnapshotValue({
+                code: normalizeCardCode(payload.code) ?? session.field[fieldKey]?.code ?? null,
+                controller: payload.controller,
+                location: normalizedLocation,
+                sequence: payload.sequence,
+                position: payload.currentPosition,
+                flags: session.field[fieldKey]?.flags ?? null,
+            });
+
+            if (!areCardSnapshotsEqual(previousEntrySnapshot, nextEntrySnapshot)) {
+                applyFieldCard(
+                    session,
+                    payload.controller,
+                    normalizedLocation,
+                    payload.sequence,
+                    normalizeCardCode(payload.code) ?? session.field[fieldKey]?.code ?? null,
+                    payload.currentPosition,
+                );
+
+                const zoneSnapshotKey = getZoneSnapshotKey(payload.controller, normalizedLocation);
+                session.fieldUpdateSnapshots[zoneSnapshotKey] = {
+                    ...previousZoneSnapshot,
+                    [String(payload.sequence)]: nextEntrySnapshot,
+                };
+            }
+        }
     }
 
     if (type === 'duel_start') {
         session.phase = 'dueling';
         session.startingPlayer = null;
         session.turnCount = 0;
+        session.fieldUpdateSnapshots = {};
     }
 
     if (type === 'duel_end') {
@@ -780,10 +1161,11 @@ function updateSession(uniqueId, type, payload = {}) {
     if (type === 'game_msg') {
         if (payload.type === 'MSG_NEW_TURN') {
             if (session.startingPlayer === null || session.startingPlayer === undefined) {
-                session.startingPlayer = payload.player ?? null;
+                const seededStartingPlayer = getStartingPlayerFromTypeChange(session.typeChange);
+                session.startingPlayer = seededStartingPlayer ?? payload.player ?? null;
             }
-            session.turnPlayer = payload.player ?? null;
             session.turnCount = (session.turnCount ?? 0) + 1;
+            session.turnPlayer = getTurnPlayerFromSeed(session.startingPlayer, session.turnCount);
         }
         if (payload.type === 'MSG_NEW_PHASE') {
             session.phase = `phase:${payload.phase}`;
@@ -796,6 +1178,14 @@ function updateSession(uniqueId, type, payload = {}) {
     }
 
     if (type === 'game_msg' && payload.type === 'MSG_START') {
+        if (payload.playerType !== null && payload.playerType !== undefined) {
+            session.typeChange = payload.playerType;
+            const seededStartingPlayer = getStartingPlayerFromTypeChange(session.typeChange);
+            if (seededStartingPlayer !== null) {
+                session.startingPlayer = seededStartingPlayer;
+                session.turnPlayer = getTurnPlayerFromSeed(session.startingPlayer, session.turnCount);
+            }
+        }
         session.playerLp = session.playerLp || { 0: null, 1: null };
         const lp0 = Number(payload.lp0);
         const lp1 = Number(payload.lp1);
@@ -868,12 +1258,31 @@ function getSessionPayload(uniqueId, options = {}) {
 
     const edoproSession = isEdoproSession(session);
     const includeReplay = options.includeReplay !== false;
+    const includeTransport = options.includeTransport === true;
     const consumeReplay = options.consumeReplay === true;
     const payload = {
         ...session,
         clientFlow: normalizeClientFlow(session.clientFlow, 'edopro'),
+        spectatorProtocol: session.spectatorProtocol ? { ...session.spectatorProtocol } : null,
+        spectatorZones: session.spectatorZones ? {
+            pileCounts: {
+                deck: {
+                    0: session.spectatorZones?.pileCounts?.deck?.[0] ?? null,
+                    1: session.spectatorZones?.pileCounts?.deck?.[1] ?? null,
+                },
+            },
+            graves: {
+                0: Array.isArray(session.spectatorZones?.graves?.[0]) ? session.spectatorZones.graves[0].map((card) => ({ ...card })) : [],
+                1: Array.isArray(session.spectatorZones?.graves?.[1]) ? session.spectatorZones.graves[1].map((card) => ({ ...card })) : [],
+            },
+            banished: {
+                0: Array.isArray(session.spectatorZones?.banished?.[0]) ? session.spectatorZones.banished[0].map((card) => ({ ...card })) : [],
+                1: Array.isArray(session.spectatorZones?.banished?.[1]) ? session.spectatorZones.banished[1].map((card) => ({ ...card })) : [],
+            },
+        } : null,
         lastEvents: Array.isArray(session.lastEvents) ? [...session.lastEvents] : [],
         replayEvents: includeReplay && Array.isArray(session.replayEvents) ? [...session.replayEvents] : [],
+        transportEvents: includeTransport && Array.isArray(session.transportEvents) ? [...session.transportEvents] : [],
     };
 
     if (consumeReplay) {

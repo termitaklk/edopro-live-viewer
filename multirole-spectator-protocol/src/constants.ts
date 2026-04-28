@@ -1,0 +1,58 @@
+export const STOC = {
+  GAME_MSG: 0x01,
+  ERROR_MSG: 0x02,
+  TYPE_CHANGE: 0x13,
+  DUEL_START: 0x15,
+  DUEL_END: 0x16,
+  WATCH_CHANGE: 0x22,
+  CATCHUP: 0xf0,
+  CHAT_2: 0xf3,
+} as const;
+
+export const MSG = {
+  START: 4,
+  WIN: 5,
+  UPDATE_DATA: 6,
+  UPDATE_CARD: 7,
+  NEW_TURN: 40,
+  NEW_PHASE: 41,
+  MOVE: 50,
+  POS_CHANGE: 53,
+  SET: 54,
+  SUMMONING: 60,
+  SUMMONED: 61,
+  SPSUMMONING: 62,
+  SPSUMMONED: 63,
+  FLIPSUMMONING: 64,
+  FLIPSUMMONED: 65,
+  CHAINING: 70,
+  CHAINED: 71,
+  CHAIN_SOLVING: 72,
+  CHAIN_SOLVED: 73,
+  CHAIN_END: 74,
+  DRAW: 90,
+  DAMAGE: 91,
+  RECOVER: 92,
+  LPUPDATE: 94,
+  PAY_LPCOST: 100,
+  ATTACK: 110,
+  BATTLE: 111,
+} as const;
+
+export const LOCATION = {
+  DECK: 0x01,
+  HAND: 0x02,
+  MZONE: 0x04,
+  SZONE: 0x08,
+  GRAVE: 0x10,
+  REMOVED: 0x20,
+  EXTRA: 0x40,
+  OVERLAY: 0x80,
+} as const;
+
+export const POSITION = {
+  FACEUP_ATTACK: 0x01,
+  FACEDOWN_ATTACK: 0x02,
+  FACEUP_DEFENSE: 0x04,
+  FACEDOWN_DEFENSE: 0x08,
+} as const;

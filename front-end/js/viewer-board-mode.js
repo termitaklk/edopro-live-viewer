@@ -14,6 +14,8 @@
             updatePhaseButtons,
             updateTopBar,
             updateBoardOrientation,
+            renderBanished,
+            babylonRenderer,
         } = context;
 
         if (
@@ -23,6 +25,7 @@
             typeof renderHand !== 'function' ||
             typeof renderField !== 'function' ||
             typeof renderGraves !== 'function' ||
+            typeof renderBanished !== 'function' ||
             typeof renderDeckCounts !== 'function' ||
             typeof updatePhaseButtons !== 'function' ||
             typeof updateTopBar !== 'function' ||
@@ -37,10 +40,14 @@
         renderHand('player2Row1', state.hands[bottomPlayerIndex] || [], false);
         renderField();
         renderGraves();
+        renderBanished();
         renderDeckCounts();
         updatePhaseButtons();
         updateTopBar();
         updateBoardOrientation();
+        if (babylonRenderer && typeof babylonRenderer.renderBoardEngine === 'function') {
+            babylonRenderer.renderBoardEngine();
+        }
     }
 
     globalScope.ViewerBoardMode = {
